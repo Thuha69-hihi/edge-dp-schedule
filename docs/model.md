@@ -1,8 +1,6 @@
 # Mô hình bài toán trong code
 
-Nguồn chính: tài liệu **"Phát biểu hình thức bài toán (1.05)"** của nhóm trưởng (Google Docs).
-File này chỉ tóm tắt những gì code đang cài, để người đọc repo không phải mở tài liệu.
-Nếu hai nơi khác nhau thì **tài liệu của TV1 là chuẩn**; sửa tài liệu đó trước, rồi sửa file này và code.
+Nguồn chính: tài liệu **"Phát biểu hình thức bài toán (1.05)"** 
 
 ## Bài toán
 Cắt chuỗi N tác vụ thành tối đa M đoạn liên tiếp, đoạn thứ s chạy trên node thứ s (pipeline cố định).
