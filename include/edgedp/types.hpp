@@ -1,7 +1,5 @@
 // Kiểu dữ liệu dùng chung cho mọi thuật toán (baseline, CHT, D&C, brute force).
-// Theo tài liệu "Phát biểu hình thức bài toán (1.05)". Đổi mô hình thì sửa tài liệu đó và
-// docs/model.md TRƯỚC, báo cả nhóm, rồi mới sửa file này.
-//
+
 // Quy ước chỉ số (rất dễ nhầm, đọc kỹ):
 //   - w[0..n-1] chứa w_1..w_N       (w[i-1] là khối lượng của tác vụ τ_i)
 //   - d[0..n-1] chứa d_0..d_{N-1}   (d[k] là dữ liệu truyền sau tác vụ τ_k, d[0] là từ thiết bị IoT)
