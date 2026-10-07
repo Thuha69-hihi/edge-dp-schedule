@@ -1,5 +1,6 @@
-// Giao diện chung: mọi solver nhận Instance và trả Solution.
+// Giao diện chung: mọi solver nhận Instance và trả Solution (xem types.hpp).
 // Giữ chữ ký này để TV4 đối chiếu và TV5 benchmark được mà không sửa code.
+// Mọi solver phải cho cùng `energy` (sai số <= 1e-9); `cuts` có thể khác khi có nhiều nghiệm tối ưu.
 #pragma once
 #include <vector>
 

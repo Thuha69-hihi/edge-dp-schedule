@@ -2,25 +2,25 @@
 
 Nhóm 2, môn Phân tích thiết kế thuật toán (NEU).
 Đề tài: **Quy hoạch động cải tiến cho lập lịch tác vụ tiết kiệm năng lượng trên Edge/IoT**
-(Convex Hull Trick, Divide and Conquer Optimization).
+(D&C Optimization, Convex Hull Trick).
 
-> Trạng thái: khung repo (tuần 1). Mô hình hiện tại là bản tạm, xem [docs/model.md](docs/model.md).
+Bài toán: cắt chuỗi N tác vụ thành tối đa M đoạn liên tiếp, mỗi đoạn chạy trên một Edge node,
+sao cho tổng năng lượng (tính toán + truyền dữ liệu + bật node) nhỏ nhất mà mỗi node xử lý xong trong chu kỳ T.
+Chi tiết: [docs/model.md](docs/model.md) và tài liệu "Phát biểu hình thức bài toán (1.05)".
 
 ## Cấu trúc
 
 ```
-include/edgedp/   kiểu dữ liệu và giao diện chung (types.hpp, solver.hpp)
-src/              baseline_dp, cht_dp, dc_opt, brute_force, io, main (CLI)
-tests/            unit test (không cần thư viện ngoài)
-scripts/          sinh dữ liệu, chạy benchmark
-data/             input mẫu
-docs/             mô hình bài toán, quy ước làm việc
+include/edgedp/   types.hpp (kiểu dữ liệu), cost.hpp (hàm chi phí dùng chung), solver.hpp (giao diện solver)
+src/              baseline_dp, cht_dp, dc_opt, brute_force, json, io, main (CLI)
+tests/            test_main.cpp (unit test), data/example_n5.json (ví dụ mục 6 của tài liệu)
+scripts/          gen_data.py (sinh dữ liệu tạm), run_benchmark.sh
+docs/             model.md, CONTRIBUTING.md
 .github/          CI và mẫu Pull Request
 ```
 
 ## Yêu cầu
-- Trình biên dịch hỗ trợ C++17 (g++ 9+, clang, MSVC)
-- `make` (Linux/macOS/MSYS2) hoặc CMake 3.14+
+- Trình biên dịch hỗ trợ C++17 (g++ 9+, clang) và `make`; hoặc CMake 3.14+
 - Python 3 (chỉ để sinh dữ liệu)
 
 ## Build và test
@@ -31,36 +31,40 @@ make test     # chạy unit test
 make clean
 ```
 
-Hoặc dùng CMake:
-
-```bash
-cmake -S . -B build && cmake --build build && ctest --test-dir build
-```
+Hoặc dùng CMake: `cmake -S . -B build && cmake --build build && ctest --test-dir build`
 
 ## Chạy
 
 ```bash
-./build/edgedp --algo baseline --input data/sample.txt --show
+./build/edgedp --algo baseline --input tests/data/example_n5.json
 ```
 
-Kết quả mong đợi với `data/sample.txt`: `energy=38`, 2 nhóm `[0,2)` và `[2,3)`.
-
+Kết quả mong đợi: `energy` = 973, `nodes_used` = 2, `cuts` = [2].
 Thuật toán: `baseline`, `cht`, `dc`, `bruteforce` (cái nào chưa cài sẽ báo "chua cai dat").
 
-### Định dạng input
+### Định dạng vào/ra (JSON)
 
+Đầu vào:
+
+```json
+{
+  "n": 5, "m": 3,
+  "w": [2, 3, 1, 4, 2],
+  "d": [3, 4, 2, 6, 1],
+  "params": {"kappa_over_T2": 1.0, "e_on": 250.0, "eps": 1.0, "cap": 8.0, "link_cap": 5.0}
+}
 ```
-N M
-w[0] w[1] ... w[N-1]
-alpha_0 setup_0
-...
-alpha_{M-1} setup_{M-1}
-```
+
+`w` có N phần tử (w₁..w_N), `d` có N phần tử (d₀..d_{N−1}), `cap` = f_max·T, `link_cap` = B·T.
+Có thể thêm `seed`, `source` để tái tạo thí nghiệm.
+
+Đầu ra: `feasible`, `energy` (null nếu không khả thi), `nodes_used`, `cuts`, `segments`, `solver`, `time_ms`.
+Mọi solver phải cho cùng `energy` (sai số ≤ 1e-9); `cuts` có thể khác khi có nhiều nghiệm tối ưu.
 
 ### Sinh dữ liệu và benchmark thử
 
 ```bash
-python3 scripts/gen_data.py --n 1000 --m 3 --seed 1 > data/generated/n1000.txt
+python3 scripts/gen_data.py --n 1000 --m 8 --seed 1 > data/generated/n1000.json
 sh scripts/run_benchmark.sh baseline
 ```
 
@@ -68,9 +72,9 @@ sh scripts/run_benchmark.sh baseline
 
 | Thành phần | Người phụ trách | Trạng thái |
 |---|---|---|
-| Khung repo, giao diện chung, CLI, test | TV3 | xong |
-| Baseline DP O(M·N²) | TV3 | bản v0 theo mô hình tạm |
-| Convex Hull Trick | TV3 | chưa làm |
+| Khung repo, giao diện chung, CLI, JSON, test | TV3 | xong |
+| Baseline DP O(M·N²) theo mô hình 1.05 | TV3 | xong, khớp ví dụ trong tài liệu |
+| Convex Hull Trick | TV3 | chưa làm (chờ họp chốt mô hình bậc hai) |
 | Brute force, D&C Optimization | TV4 | chưa làm |
 | Dữ liệu và benchmark | TV5 | chưa làm |
 

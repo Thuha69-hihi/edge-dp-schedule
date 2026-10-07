@@ -12,4 +12,5 @@
 3. Test đối chiếu với baseline tự động chạy qua `cross_check_*` trong `tests/test_main.cpp`.
 
 ## Đổi mô hình bài toán
-Chỉ sau khi TV1 chốt. Sửa `types.hpp` và `docs/model.md` trước, báo cả nhóm, rồi mới sửa solver.
+Chỉ sau khi TV1 chốt trong tài liệu "Phát biểu hình thức bài toán (1.05)". Sửa tài liệu đó, rồi `docs/model.md`,
+`types.hpp`, `cost.hpp`, báo cả nhóm, rồi mới sửa solver. Mọi solver phải dùng `CostModel::cost` chung, không tự viết lại công thức.
