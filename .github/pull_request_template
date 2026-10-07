@@ -1,0 +1,13 @@
+## Làm gì
+<!-- 1-2 câu: PR này thêm/sửa gì -->
+
+## Liên quan tới mục nào trong sheet
+<!-- ví dụ: TV3 - baseline DP, tuần 2 -->
+
+## Đã kiểm tra
+- [ ] `make test` chạy qua (không có FAIL)
+- [ ] Đã so với baseline / brute force (nếu là thuật toán mới)
+- [ ] Đã cập nhật README / docs nếu đổi cách chạy
+
+## Link minh chứng để dán vào sheet
+<!-- commit, ảnh kết quả... -->
