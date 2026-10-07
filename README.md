@@ -6,7 +6,7 @@ Nhóm 2, môn Phân tích thiết kế thuật toán (NEU).
 
 Bài toán: cắt chuỗi N tác vụ thành tối đa M đoạn liên tiếp, mỗi đoạn chạy trên một Edge node,
 sao cho tổng năng lượng (tính toán + truyền dữ liệu + bật node) nhỏ nhất mà mỗi node xử lý xong trong chu kỳ T.
-Chi tiết: [docs/model.md](docs/model.md) và tài liệu "Phát biểu hình thức bài toán (1.05)".
+Chi tiết: [docs/model.md](docs/model.md).
 
 ## Cấu trúc
 
@@ -67,16 +67,6 @@ Mọi solver phải cho cùng `energy` (sai số ≤ 1e-9); `cuts` có thể kh�
 python3 scripts/gen_data.py --n 1000 --m 8 --seed 1 > data/generated/n1000.json
 sh scripts/run_benchmark.sh baseline
 ```
-
-## Tiến độ cài đặt
-
-| Thành phần | Người phụ trách | Trạng thái |
-|---|---|---|
-| Khung repo, giao diện chung, CLI, JSON, test | TV3 | xong |
-| Baseline DP O(M·N²) theo mô hình 1.05 | TV3 | xong, khớp ví dụ trong tài liệu |
-| Convex Hull Trick | TV3 | chưa làm (chờ họp chốt mô hình bậc hai) |
-| Brute force, D&C Optimization | TV4 | chưa làm |
-| Dữ liệu và benchmark | TV5 | chưa làm |
 
 ## Đóng góp
 Xem [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md): không push thẳng `main`, mọi thay đổi qua Pull Request có review.
