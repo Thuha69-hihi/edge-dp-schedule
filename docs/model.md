@@ -33,19 +33,27 @@ Thời gian O(M·N²). Giá trị DP giữ hai hàng (O(N)), bảng `opt` đầy
 | Cost(k+1, i) | `cost(k, i)`, nhận chỉ số tiền tố k |
 
 ## Kiểu số
-Năng lượng dùng `long double`; w, S, d dùng `long long` (mục 9, câu 4: đề xuất của nhóm trưởng).
-Hai năng lượng so sánh bằng sai số tuyệt đối/tương đối 1e-9. Test so `energy`, không so `cuts`.
+Năng lượng dùng `long double`; w, S, d dùng `long long` (mục 9, quyết định 4).
+Hai năng lượng so sánh bằng sai số tương đối ≤ 1e-9 (năng lượng có thể lên tới khoảng 10^20 nên không dùng sai số tuyệt đối). Test so `energy`, không so `cuts`.
 
 ## Kiểm chứng ví dụ trong tài liệu (mục 6)
 `tests/data/example_n5.json` cho kết quả 973, 2 node, cắt sau τ2 (đoạn 378 + 595).
 Các ô trong bảng DP đã được kiểm tra bằng một chương trình độc lập, và baseline được đối chiếu
 với một bản vét cạn trong `tests/test_main.cpp` trên 600 input ngẫu nhiên (có cả vô nghiệm).
 
-## Còn chờ họp nhóm quyết định (mục 9 của tài liệu)
-- [ ] Mô hình năng lượng: bậc ba (D&C) làm chính; bậc hai là biến thể để dùng CHT. Code hiện chỉ có bậc ba.
-- [ ] Giữ E_on trong mục tiêu (đề xuất: giữ)
-- [ ] Deadline theo đoạn (đề xuất) hay theo từng tác vụ
-- [ ] Khoảng tham số khi sinh dữ liệu (TV5)
+## Quyết định tuần 1 (mục 9 của tài liệu 1.05)
+- Mô hình năng lượng: bậc ba κ·W³/T² là mô hình chính; bậc hai a·W² + b·W là biến thể để dùng CHT.
+  Code chọn bằng tham số `"model": "cubic" | "quadratic"` (chưa cài, cần có trước việc 4.02).
+- Giữ E_on trong hàm mục tiêu.
+- Deadline theo đoạn (chu kỳ T); deadline từng tác vụ chỉ nêu trong phần Thảo luận.
+- Tham số sinh dữ liệu (việc 2.06): với W̄ = S_N / M, đặt cap = α·W̄ và e_on = β·W̄³,
+  α ∈ {1.2, 4}, β ∈ {1, 10, 100} (β = 100 thì dùng α = 4); eps sao cho eps·d̄ = 0.05·e_on;
+  link_cap = phân vị 90% của d.
+
+## Quy ước khi hòa
+- Nhiều k cùng đạt min: chọn k nhỏ nhất (so sánh bằng `<`, không dùng `<=`).
+  Chứng minh tính đơn điệu cho D&C (việc 3.01) dựa trên quy ước này.
+- Nhiều j cùng đạt E*: chọn j nhỏ nhất (dùng ít node hơn).
 
 ## Điểm cần chú ý khi cài các solver nhanh
 - **CHT:** với bậc ba, `(S_i − S_k)³` có số hạng S_i²·S_k và S_i·S_k², nên CHT chuẩn không dùng được;
