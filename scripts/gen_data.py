@@ -1,56 +1,75 @@
 #!/usr/bin/env python3
-"""Sinh dữ liệu mô phỏng theo định dạng JSON ở mục 8 của tài liệu mô hình.
+"""Task 2.06 - IoT task-chain data generator (TV5).
 
-Ví dụ:
-    python3 scripts/gen_data.py --n 1000 --m 8 --seed 1 > data/generated/n1000.json
-(Thư mục data/generated/ nằm trong .gitignore; chỉ commit file nhỏ hoặc script sinh.)
+Model (see 'Ghi chu ky thuat' #1,#2): N tasks in a sequential chain, split into
+<= M contiguous segments, one per Edge node.
+  w_i : CPU cycles of task i (workload)
+  d_i : bytes sent from task i to task i+1 (transfer at segment boundary)
+  dl_i: per-task deadline offset; segment (k,i] must finish by deadline
+Outputs JSON or CSV. Fixed seed -> reproducible.
 
-BẢN TẠM của TV3 để chạy thử baseline. TV5 sẽ thay bằng bộ sinh chính thức (việc 2.06):
-khoảng tham số theo khảo sát 1.06, có cả trường hợp dùng ít và dùng hết M node.
-Mặc định cap = 1.5 * (tổng w / m) nên luôn đủ chỗ cho m node và thường có nghiệm.
+Usage:
+  python3 gen_data.py --n 1000 --m 8 --seed 1 --dist lognormal --out data/n1000_m8_s1.json
+  python3 gen_data.py --trace cluster.csv --n 1000 --out data/trace.json   # Google trace mapping (5.01)
 """
-import argparse
-import json
-import math
-import random
+import argparse, csv, json, random, math, sys
 
+DISTS = ("uniform", "lognormal", "pareto", "bimodal")
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, required=True, help="số tác vụ N")
-    ap.add_argument("--m", type=int, default=8, help="số node tối đa M")
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-w", type=int, default=20)
-    ap.add_argument("--max-d", type=int, default=20)
-    ap.add_argument("--e-on", type=float, default=250.0)
-    ap.add_argument("--eps", type=float, default=1.0)
-    ap.add_argument("--kappa-over-t2", type=float, default=1.0)
-    ap.add_argument("--cap-factor", type=float, default=1.5,
-                    help="cap = cap_factor * tổng_w / m (nhưng không nhỏ hơn max w)")
-    a = ap.parse_args()
+def draw(rng, dist, mean):
+    if dist == "uniform":   return rng.uniform(0.2 * mean, 1.8 * mean)
+    if dist == "lognormal":
+        s = 0.8; return rng.lognormvariate(math.log(mean) - s * s / 2, s)
+    if dist == "pareto":
+        a = 2.5; return mean * (a - 1) / a * rng.paretovariate(a)
+    if dist == "bimodal":   return mean * (0.3 if rng.random() < 0.7 else 3.4) * rng.uniform(.8, 1.2)
+    raise ValueError(dist)
 
-    rng = random.Random(a.seed)
-    w = [rng.randint(1, a.max_w) for _ in range(a.n)]
-    d = [rng.randint(0, a.max_d) for _ in range(a.n)]
-    cap = max(max(w), math.ceil(a.cap_factor * sum(w) / a.m))
-    link_cap = max(d)  # mặc định không chặn chỗ cắt nào
+def gen(n, m, seed, dist="lognormal", w_mean=5e7, d_mean=2e4, slack=1.5,
+        f_max=1e9, trace_w=None):
+    rng = random.Random(seed)
+    if trace_w:
+        w = [trace_w[i % len(trace_w)] for i in range(n)]
+    else:
+        w = [max(1.0, round(draw(rng, dist, w_mean))) for _ in range(n)]
+    d = [max(1.0, round(draw(rng, "lognormal", d_mean))) for _ in range(n)]
+    d[-1] = 0                       # last task sends nothing
+    # deadline: with m nodes at max freq an even split needs ~sum(w)/(m*f_max); give `slack` margin
+    total = sum(w)
+    horizon = slack * total / (m * f_max)
+    # cumulative per-task deadline (seconds) grows linearly with prefix workload -> feasible chain
+    S = 0.0; dl = []
+    for wi in w:
+        S += wi
+        dl.append(round(slack * (S / f_max) + horizon / m, 9))
+    return {"n": n, "m": m, "seed": seed, "dist": dist, "f_max": f_max,
+            "slack": slack, "w": w, "d": d, "deadline": dl}
 
-    print(json.dumps({
-        "n": a.n,
-        "m": a.m,
-        "w": w,
-        "d": d,
-        "params": {
-            "kappa_over_T2": a.kappa_over_t2,
-            "e_on": a.e_on,
-            "eps": a.eps,
-            "cap": float(cap),
-            "link_cap": float(link_cap),
-        },
-        "seed": a.seed,
-        "source": "synthetic",
-    }))
+def load_trace(path, col="cpu_cycles"):
+    out = []
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            try: out.append(float(row[col]))
+            except (KeyError, ValueError): pass
+    if not out: sys.exit("trace has no usable rows")
+    return out
 
+def write(inst, path):
+    if path.endswith(".csv"):
+        with open(path, "w", newline="") as f:
+            wr = csv.writer(f); wr.writerow(["i", "w", "d", "deadline"])
+            for i in range(inst["n"]):
+                wr.writerow([i + 1, inst["w"][i], inst["d"][i], inst["deadline"][i]])
+    else:
+        with open(path, "w") as f: json.dump(inst, f)
 
 if __name__ == "__main__":
-    main()
+    p = argparse.ArgumentParser()
+    p.add_argument("--n", type=int, required=True); p.add_argument("--m", type=int, default=8)
+    p.add_argument("--seed", type=int, default=1); p.add_argument("--dist", choices=DISTS, default="lognormal")
+    p.add_argument("--slack", type=float, default=1.5); p.add_argument("--trace")
+    p.add_argument("--trace-col", default="cpu_cycles"); p.add_argument("--out", required=True)
+    a = p.parse_args()
+    tw = load_trace(a.trace, a.trace_col) if a.trace else None
+    write(gen(a.n, a.m, a.seed, a.dist, slack=a.slack, trace_w=tw), a.out)
+    print(f"wrote {a.out}")
