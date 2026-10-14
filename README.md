@@ -11,10 +11,11 @@ Chi tiết: [docs/model.md](docs/model.md).
 ## Cấu trúc
 
 ```
-include/edgedp/   types.hpp (kiểu dữ liệu), cost.hpp (hàm chi phí dùng chung), solver.hpp (giao diện solver)
-src/              baseline_dp, cht_dp, dc_opt, brute_force, json, io, main (CLI)
+include/edgedp/   types.hpp, cost.hpp, solver.hpp, heuristics.hpp
+src/              baseline_dp, cht_dp, dc_opt, brute_force, heuristics, json, io, main, main_heuristics
+bench/            run_bench.cpp (đo thời gian & bộ nhớ RSS)
 tests/            test_main.cpp (unit test), data/example_n5.json (ví dụ mục 6 của tài liệu)
-scripts/          gen_data.py (sinh dữ liệu tạm), run_benchmark.sh
+scripts/          gen_data.py (sinh dữ liệu IoT tổng hợp)
 docs/             model.md, CONTRIBUTING.md
 .github/          CI và mẫu Pull Request
 ```
@@ -26,7 +27,7 @@ docs/             model.md, CONTRIBUTING.md
 ## Build và test
 
 ```bash
-make          # build ./build/edgedp và ./build/run_tests
+make          # build ./build/edgedp, ./build/edgedp_heur, ./build/run_bench và ./build/run_tests
 make test     # chạy unit test
 make clean
 ```
@@ -95,8 +96,14 @@ Solver chưa cài: dc và cht hiện chỉ là stub nên hiện dòng not_impl, 
 Mã thoát: 0 là bình thường. 3 nghĩa là các solver chính xác cho năng lượng khác nhau (có dòng MISMATCH trong CSV). 2 là sai tham số hoặc không tìm thấy CLI.
 
 ```bash
-python3 scripts/gen_data.py --n 1000 --m 8 --seed 1 > data/generated/n1000.json
-sh scripts/run_benchmark.sh baseline
+# Sinh dữ liệu IoT mẫu
+python3 scripts/gen_data.py --n 1000 --m 8 --seed 1 --out data/x.json
+
+# So sánh 4 heuristic với DP baseline
+./build/edgedp_heur --input data/x.json
+
+# Benchmark tự động xuất CSV (Linux)
+./build/run_bench --bin ./build/edgedp data/x.json --out results/time_mem.csv
 ```
 
 ## Đóng góp

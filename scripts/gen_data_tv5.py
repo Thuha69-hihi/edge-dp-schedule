@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scripts/gen_data.py - Bộ sinh dữ liệu IoT tổng hợp (việc 2.06, TV5 Thành Công).
+"""scripts/gen_data_tv5.py - Bộ sinh dữ liệu IoT tổng hợp (việc 2.06, TV5 Thành Công).
 
 Sinh instance JSON đúng định dạng mục 8 của "Phát biểu hình thức bài toán" (1.05) và
 tham số theo bảng "Tham số sinh dữ liệu" ở mục 9 (quyết định tuần 1):
