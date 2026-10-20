@@ -194,7 +194,7 @@ static bool zero_work_tasks() {
 static bool baseline_vs_oracle_random() {
     std::mt19937 rng(20261005);
     int feasible_cnt = 0, infeasible_cnt = 0;
-    for (int t = 0; t < 600; ++t) {
+    for (int t = 0; t < 1000; ++t) {
         Instance in = random_instance(rng, 11, 5);
         Solution s = solve_baseline(in);
         const ld ref = oracle_enumerate(in);
@@ -202,7 +202,7 @@ static bool baseline_vs_oracle_random() {
         if (s.feasible) { CHECK(close_enough(ref, s.energy)); ++feasible_cnt; } else { ++infeasible_cnt; }
         CHECK(valid_solution(in, s));
     }
-    CHECK(feasible_cnt > 50 && infeasible_cnt > 50);  // phải có cả hai loại input
+    CHECK(feasible_cnt > 100 && infeasible_cnt > 100);  // phải có cả hai loại input (1000 vòng)
     return true;
 }
 
@@ -251,10 +251,13 @@ static bool json_infeasible_prints_null() {
 
 // ---------------- Đối chiếu solver khác với baseline (SKIP nếu chưa cài) ----------------
 
+// Việc 2.04 của TV4 quy định chỉ dùng brute force cho N ≤ 12 để đối chiếu. Vì cross_check
+// đi cùng cả solver khác (D&C), ta giữ N ≤ 12 cho mọi solver trong cross_check để tránh
+// brutal O(2^(N-1)) treo máy.
 static bool cross_check(SolverFn fn) {
     std::mt19937 rng(2026);
     for (int t = 0; t < 400; ++t) {
-        Instance in = random_instance(rng, 40, 6);
+        Instance in = random_instance(rng, 12, 5);  // N<=12, M<=5
         Solution ref = solve_baseline(in);
         Solution got = fn(in);  // có thể ném NotImplemented -> SKIP
         CHECK(got.feasible == ref.feasible);
