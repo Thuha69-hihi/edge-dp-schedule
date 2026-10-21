@@ -1,4 +1,4 @@
-# Khảo sát nguồn dữ liệu mô phỏng (việc 1.06 của TV5)
+# Khảo sát nguồn dữ liệu mô phỏng
 
 Nội dung so sánh các nguồn dữ liệu mà nhóm cân nhắc dùng cho thí nghiệm
 (ví dụ Google Cluster Data 2011, Google Borg trace 2019, Alibaba cluster-trace-v2018 và

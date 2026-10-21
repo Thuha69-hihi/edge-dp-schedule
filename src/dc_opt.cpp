@@ -15,13 +15,10 @@
 //       compute(j, lo, mid-1, optL, best)
 //       compute(j, mid+1, hi, best, optR)
 //
-// Lưu ý (mục 5 tài liệu mô hình + docs/design.md):
+// Lưu ý:
 //   - Cost và prev[k] có thể +inf (vượt cap, d_k > link_cap, hoặc chưa đủ node).
-//     Khi mọi k trong khoảng đều +inf thì cur[i] = +inf và cur_opt[i] = -1. Đơn điệu bị
-//     phá nếu gán opt tùy ý; quy tắc ở đây: nếu không tìm được k hữu hạn thì giữ nguyên
-//     cur_opt[i] = -1 và KHÔNG dùng làm ràng buộc đơn điệu trong lần đệ quy sau
-//     (caller truyền best=optL khi left bị hỏng, v.v.). Để tránh phá đệ quy, ta truyền
-//     range hẹp nhất có nghiệm hữu hạn.
+//     Khi mọi k trong khoảng đều +inf thì cur[i] = +inf và cur_opt[i] = -1. Hàng đó
+//     KHÔNG cung cấp ràng buộc đơn điệu: cả hai nhánh đệ quy giữ nguyên [optL, optR].
 //   - Bộ nhớ: cur_dp và cur_opt có size (n+1).
 #include <algorithm>
 #include <limits>
@@ -67,11 +64,13 @@ void compute(int j, int lo, int hi,
     cur[mid] = best_val;
     cur_opt[mid] = best_k_pos;
 
-    int left_bound = (best_k_pos >= 0) ? best_k_pos : optL;
-    int right_bound = (best_k_pos >= 0) ? best_k_pos : optR;
+    // mid có nghiệm: chia khoảng theo best_k_pos (opt đơn điệu).
+    // mid vô nghiệm: không có thông tin đơn điệu, giữ nguyên [optL, optR] cho cả hai nhánh.
+    const int left_hi  = (best_k_pos >= 0) ? best_k_pos : optR;
+    const int right_lo = (best_k_pos >= 0) ? best_k_pos : optL;
 
-    compute(j, lo, mid - 1, optL, left_bound, prev, cur, cur_opt, cm);
-    compute(j, mid + 1, hi, right_bound, optR, prev, cur, cur_opt, cm);
+    compute(j, lo, mid - 1, optL, left_hi, prev, cur, cur_opt, cm);
+    compute(j, mid + 1, hi, right_lo, optR, prev, cur, cur_opt, cm);
 }
 
 }  // namespace
@@ -96,11 +95,6 @@ Solution solve_dc(const Instance& in) {
         std::fill(cur.begin(), cur.end(), INF);
         std::fill(opt[j].begin(), opt[j].end(), -1);
 
-        // Khoảng k khả thi tại hàng j: prev[k] phải hữu hạn, tức tồn tại cấu hình j-1 đoạn trên k
-        // tác vụ đầu. Trên lý thuyết luôn có k = j-1 (DP(j-1, j-1) hữu hạn nếu bài toán khả thi)
-        // và khoảng với mỗi i hữu hạn nằm trong [j-1, min(i-1, opt của i+1)].
-        // Suppress unused-parameter warnings cho prev_opt_for_j dùng cho stub heuristic.
-        (void)opt;  // chỉ dùng opt[j] để ghi, không đọc.
         compute(j, j, n, j - 1, n - 1, prev, cur, opt[j], cm);
 
         energy_per_j[j] = cur[n];
