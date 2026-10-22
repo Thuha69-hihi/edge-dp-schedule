@@ -64,13 +64,20 @@ static bool valid_solution(const Instance& in, const Solution& s) {
     return pos == in.n && close_enough(total, s.energy);
 }
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+static inline int popcount32(unsigned int x) { return static_cast<int>(__popcnt(x)); }
+#else
+static inline int popcount32(unsigned int x) { return __builtin_popcount(x); }
+#endif
+
 // "Oracle" độc lập: duyệt mọi tập điểm cắt (N nhỏ). Trả +inf nếu vô nghiệm.
 static ld oracle_enumerate(const Instance& in) {
     CostModel cm(in);
     const int n = in.n;
     ld best = inf();
     for (unsigned mask = 0; mask < (1u << (n - 1)); ++mask) {
-        if (__builtin_popcount(mask) + 1 > in.m) continue;
+        if (popcount32(mask) + 1 > in.m) continue;
         int prev = 0;
         ld total = 0;
         for (int i = 1; i <= n && total != inf(); ++i) {
