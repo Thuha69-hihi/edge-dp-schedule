@@ -2,9 +2,11 @@
 //
 // Chạy các solver (qua CLI build/edgedp) trên nhiều instance và xuất CSV:
 //   * time_ms: do chính solver đo bằng std::chrono (chỉ phần giải) + wall_ms do harness đo (cả tiến trình);
-//   * bộ nhớ đỉnh (RSS): ưu tiên `/usr/bin/time -v` (mem_src = time), nếu không có thì lấy mẫu
-//     VmHWM của tiến trình con trong /proc (mem_src = proc, Linux; gần đúng với lần chạy < ~10 ms).
-//     Không dùng ru_maxrss của wait4: sau fork() tiến trình con thừa hưởng RSS của cha;
+//   * bộ nhớ đỉnh (RSS), tùy hệ điều hành:
+//       - Windows: GetProcessMemoryInfo().PeakWorkingSetSize của tiến trình con (mem_src = win);
+//       - Linux: ưu tiên `/usr/bin/time -v` (mem_src = time), nếu không có thì lấy mẫu VmHWM của
+//         tiến trình con trong /proc (mem_src = proc; gần đúng với lần chạy < ~10 ms).
+//         Không dùng ru_maxrss của wait4: sau fork() tiến trình con thừa hưởng RSS của cha;
 //   * đối chiếu: solver "chính xác" (baseline, dc, cht) phải cho cùng năng lượng (sai số tương
 //     đối <= 1e-9) -> cột match_ref; heuristic có thêm energy_saved_pct (chỉ khi heuristic khả thi).
 //
@@ -14,23 +16,19 @@
 // Heuristic (greedy, equal, single, roundrobin) chưa có trong CLI nên mặc định không chạy.
 //
 // Build (từ thư mục gốc dự án, json.cpp/json.hpp nằm cạnh io.cpp):
-//   g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench
+//   Linux/macOS:  g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench
+//   Windows (MinGW):  g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench.exe -lpsapi
+//   Windows (MSVC):   cl /std:c++17 /O2 /EHsc /Isrc bench\run_bench.cpp src\json.cpp /Fe:build\run_bench.exe
 // Ví dụ:
 //   build/run_bench --bin build/edgedp data/synthetic --repeats 3 --max-n baseline=10000
 //       --timeout 600 --out results/time_mem.csv --summary results/time_mem_summary.csv
 //   build/run_bench --bin build/edgedp data/small/manifest.csv --solvers baseline,dc
 // Đầu vào: file .json, thư mục (mọi *.json, đệ quy), glob, hoặc manifest.csv do gen_data.py sinh.
-// Đo bộ nhớ cần Linux (Ubuntu: `sudo apt install time` nếu thiếu /usr/bin/time).
-#include <fcntl.h>
-#include <glob.h>
-#include <signal.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <unistd.h>
-
+// Đo bộ nhớ: Windows dùng sẵn API hệ thống; Linux cần /usr/bin/time (`sudo apt install time`) hoặc /proc.
+// --mem-mode: auto | time | proc | win | none (time/proc chỉ Linux, win chỉ Windows).
+// Glob hỗ trợ * và ? (kể cả ở thư mục giữa đường dẫn); không hỗ trợ [...].
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -44,8 +42,32 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <tuple>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <psapi.h>  // GetProcessMemoryInfo (MinGW: thêm -lpsapi)
+#ifdef _MSC_VER
+#pragma comment(lib, "psapi.lib")
+#endif
+#else
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 
 #include "json.hpp"
 
@@ -57,7 +79,6 @@ static const char* DEFAULT_SOLVERS = "baseline,dc,cht";
 static const char* DEFAULT_EXACT = "baseline,dc,cht";
 static const std::set<std::string> HEURISTICS = {"greedy", "equal", "single", "roundrobin"};
 static const double REL_TOL = 1e-9;
-static const char* TIME_BIN = "/usr/bin/time";
 static const char* CLI_FLAG = "--algo";
 
 struct Row {
@@ -102,10 +123,10 @@ static std::vector<std::string> split(const std::string& s, char sep) {
 }
 
 // ----------------------------------------------------------------------------- chạy 1 lần
-static std::string mem_mode = "none";
+static std::string mem_mode = "none";  // none | time, proc (POSIX) | win (Windows)
 
 struct RunResult {
-    std::string status = "ok";  // ok | timeout
+    std::string status = "ok";  // ok | timeout | error
     std::string out, err;
     double wall_ms = 0;
     Opt rss_mb;
@@ -117,15 +138,157 @@ static std::string read_file_str(const std::string& path) {
     return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 }
 
-static std::string read_tmp(FILE* f) {
-    std::fflush(f);
-    std::rewind(f);
-    std::string s;
-    char buf[65536];
-    size_t k;
-    while ((k = std::fread(buf, 1, sizeof buf, f)) > 0) s.append(buf, k);
-    return s;
+// File tạm chứa stdout/stderr của tiến trình con (thay std::tmpfile: trên Windows tmpfile ghi vào gốc ổ đĩa
+// và có thể bị từ chối quyền).
+static std::string make_temp_path(const char* tag) {
+    static int counter = 0;
+#ifdef _WIN32
+    unsigned long pid = GetCurrentProcessId();
+#else
+    unsigned long pid = static_cast<unsigned long>(getpid());
+#endif
+    return (fs::temp_directory_path() /
+            ("run_bench_" + std::to_string(pid) + "_" + std::to_string(++counter) + "_" + tag + ".tmp"))
+        .string();
 }
+
+static void collect_outputs(RunResult& r, const std::string& out_path, const std::string& err_path) {
+    r.out = read_file_str(out_path);
+    r.err = read_file_str(err_path);
+    std::error_code ec;
+    fs::remove(out_path, ec);
+    fs::remove(err_path, ec);
+}
+
+#ifdef _WIN32
+// ============================== Windows ==============================
+// Thay fork/exec/waitpid/kill bằng CreateProcess + Job Object; thay /usr/bin/time và /proc/<pid>/status
+// bằng GetProcessMemoryInfo(...).PeakWorkingSetSize (đỉnh RSS chính xác do hệ điều hành ghi, đọc sau khi
+// tiến trình con kết thúc, không cần lấy mẫu).
+static std::wstring quote_arg(const std::wstring& s) {
+    if (!s.empty() && s.find_first_of(L" \t\n\v\"") == std::wstring::npos) return s;
+    std::wstring o = L"\"";
+    size_t bs = 0;
+    for (wchar_t c : s) {
+        if (c == L'\\') {
+            ++bs;
+            continue;
+        }
+        if (c == L'"') {
+            o.append(bs * 2 + 1, L'\\');
+            o += L'"';
+        } else {
+            o.append(bs, L'\\');
+            o += c;
+        }
+        bs = 0;
+    }
+    o.append(bs * 2, L'\\');
+    return o + L"\"";
+}
+
+static HANDLE open_inheritable(const std::wstring& path, bool write) {
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof sa;
+    sa.bInheritHandle = TRUE;
+    return CreateFileW(path.c_str(), write ? GENERIC_WRITE : GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
+                       write ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+static RunResult run_once(std::vector<std::string> cmd, double timeout) {
+    RunResult r;
+    const std::string out_path = make_temp_path("out"), err_path = make_temp_path("err");
+    auto close_h = [](HANDLE h) {
+        if (h && h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    };
+    HANDLE hin = open_inheritable(L"NUL", false);  // tương đương /dev/null
+    HANDLE hout = open_inheritable(fs::path(out_path).wstring(), true);
+    HANDLE herr = open_inheritable(fs::path(err_path).wstring(), true);
+    if (hin == INVALID_HANDLE_VALUE || hout == INVALID_HANDLE_VALUE || herr == INVALID_HANDLE_VALUE) {
+        close_h(hin); close_h(hout); close_h(herr);
+        r.status = "error";
+        return r;
+    }
+
+    std::wstring cmdline;
+    for (size_t i = 0; i < cmd.size(); ++i) {
+        fs::path p(cmd[i]);
+        if (i == 0) p.make_preferred();  // build/edgedp -> build\edgedp
+        if (i) cmdline += L' ';
+        cmdline += quote_arg(p.wstring());
+    }
+
+    // Job Object: giết cả cây tiến trình khi timeout (thay setsid + kill(-pid)), và tự dọn nếu harness bị ngắt.
+    HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION li{};
+        li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof li);
+    }
+
+    STARTUPINFOW si{};
+    si.cb = sizeof si;
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = hin;
+    si.hStdOutput = hout;
+    si.hStdError = herr;
+    PROCESS_INFORMATION pi{};
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto elapsed = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    BOOL ok = CreateProcessW(nullptr, &cmdline[0], nullptr, nullptr, TRUE, CREATE_SUSPENDED | CREATE_NO_WINDOW,
+                             nullptr, nullptr, &si, &pi);
+    close_h(hin); close_h(hout); close_h(herr);  // tiến trình con đã giữ bản sao handle
+    if (!ok) {
+        DWORD e = GetLastError();
+        r.wall_ms = elapsed() * 1000.0;
+        close_h(job);
+        collect_outputs(r, out_path, err_path);
+        r.err = "CreateProcess lỗi, mã " + std::to_string(e) + "\n" + r.err;
+        r.rc = 127;  // giống _exit(127) khi execvp thất bại
+        return r;
+    }
+    const bool in_job = job && AssignProcessToJobObject(job, pi.hProcess);
+    ResumeThread(pi.hThread);
+    CloseHandle(pi.hThread);
+
+    DWORD w = WaitForSingleObject(pi.hProcess, timeout > 0 ? static_cast<DWORD>(timeout * 1000.0) : INFINITE);
+    if (w == WAIT_TIMEOUT) {
+        r.status = "timeout";
+        if (in_job) TerminateJobObject(job, 1);
+        else TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess, INFINITE);
+    }
+    r.wall_ms = elapsed() * 1000.0;
+
+    DWORD code = 0;
+    GetExitCodeProcess(pi.hProcess, &code);
+    if (mem_mode == "win" && r.status == "ok") {
+        PROCESS_MEMORY_COUNTERS pmc{};
+        pmc.cb = sizeof pmc;
+        if (GetProcessMemoryInfo(pi.hProcess, &pmc, sizeof pmc))
+            r.rss_mb = static_cast<double>(pmc.PeakWorkingSetSize) / (1024.0 * 1024.0);
+    }
+    CloseHandle(pi.hProcess);
+    close_h(job);
+    collect_outputs(r, out_path, err_path);
+    r.rc = r.status == "ok" ? static_cast<int>(code) : -1;
+    return r;
+}
+
+static void detect_mem_mode(const std::string& requested) {
+    if (requested == "none") {
+        mem_mode = "none";
+        return;
+    }
+    if (requested != "auto" && requested != "win")
+        std::cerr << "Cảnh báo: --mem-mode " << requested << " chỉ có trên Linux, dùng 'win' thay thế\n";
+    mem_mode = "win";
+}
+
+#else
+// ============================== POSIX (Linux) ==============================
+static const char* TIME_BIN = "/usr/bin/time";
 
 static Opt vmhwm_mb(pid_t pid, const std::string& self_cmdline) {
     const std::string base = "/proc/" + std::to_string(pid);
@@ -141,10 +304,13 @@ static Opt vmhwm_mb(pid_t pid, const std::string& self_cmdline) {
 static RunResult run_once(std::vector<std::string> cmd, double timeout) {
     if (mem_mode == "time") cmd.insert(cmd.begin(), {TIME_BIN, "-v"});
     const std::string self_cmdline = mem_mode == "proc" ? read_file_str("/proc/self/cmdline") : "";
-    FILE* fo = std::tmpfile();
-    FILE* fe = std::tmpfile();
+    const std::string out_path = make_temp_path("out"), err_path = make_temp_path("err");
+    int fo = open(out_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    int fe = open(err_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
     RunResult r;
-    if (!fo || !fe) {
+    if (fo < 0 || fe < 0) {
+        if (fo >= 0) close(fo);
+        if (fe >= 0) close(fe);
         r.status = "error";
         return r;
     }
@@ -159,10 +325,17 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
         setsid();
         int dn = open("/dev/null", O_RDONLY);
         if (dn >= 0) dup2(dn, 0);
-        dup2(fileno(fo), 1);
-        dup2(fileno(fe), 2);
+        dup2(fo, 1);
+        dup2(fe, 2);
         execvp(argv[0], argv.data());
         _exit(127);
+    }
+    close(fo);
+    close(fe);
+    if (pid < 0) {
+        r.status = "error";
+        collect_outputs(r, out_path, err_path);
+        return r;
     }
     int st = 0;
     double delay = 0.0005;
@@ -177,15 +350,11 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
             waitpid(pid, &st, 0);
             break;
         }
-        timespec ts{0, static_cast<long>(delay * 1e9)};
-        nanosleep(&ts, nullptr);
+        std::this_thread::sleep_for(std::chrono::duration<double>(delay));
         delay = std::min(delay * 2, mem_mode == "proc" ? 0.002 : 0.02);
     }
     r.wall_ms = elapsed() * 1000.0;
-    r.out = read_tmp(fo);
-    r.err = read_tmp(fe);
-    std::fclose(fo);
-    std::fclose(fe);
+    collect_outputs(r, out_path, err_path);
     r.rc = r.status == "ok" && WIFEXITED(st) ? WEXITSTATUS(st) : -1;
     if (mem_mode == "time" && r.status == "ok") {
         const std::string key = "Maximum resident set size";
@@ -199,7 +368,7 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
 }
 
 static void detect_mem_mode(const std::string& requested) {
-    if (requested != "auto") {
+    if (requested != "auto" && requested != "win") {
         mem_mode = requested;
         return;
     }
@@ -211,7 +380,62 @@ static void detect_mem_mode(const std::string& requested) {
             return;
         }
     }
-    if (fs::is_directory("/proc/self")) mem_mode = "proc";
+    std::error_code ec;
+    if (fs::is_directory("/proc/self", ec)) mem_mode = "proc";
+}
+#endif
+
+// ----------------------------------------------------------------------------- glob (thay <glob.h>)
+// Hỗ trợ * và ? trong từng thành phần đường dẫn; kết quả được sắp xếp như glob(3).
+static bool same_ch(char a, char b) {
+#ifdef _WIN32
+    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+#else
+    return a == b;
+#endif
+}
+
+static bool wild_match(const char* p, const char* s) {
+    if (!*p) return !*s;
+    if (*p == '*') {
+        for (;; ++s) {
+            if (wild_match(p + 1, s)) return true;
+            if (!*s) return false;
+        }
+    }
+    if (!*s) return false;
+    if (*p == '?' || same_ch(*p, *s)) return wild_match(p + 1, s + 1);
+    return false;
+}
+
+static std::vector<std::string> expand_glob(const std::string& pattern) {
+    fs::path pat(pattern);
+    std::vector<fs::path> cur{pat.root_path()};
+    for (const auto& part : pat.relative_path()) {
+        const std::string ps = part.string();
+        std::vector<fs::path> next;
+        if (ps.find_first_of("*?") == std::string::npos) {
+            for (auto& b : cur) next.push_back(b / part);
+        } else {
+            for (auto& b : cur) {
+                std::error_code ec;
+                fs::path dir = b.empty() ? fs::path(".") : b;
+                for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+                    std::string name = it->path().filename().string();
+                    if (!name.empty() && name[0] == '.' && ps[0] != '.') continue;  // glob(3) bỏ qua file ẩn
+                    if (wild_match(ps.c_str(), name.c_str())) next.push_back(b / name);
+                }
+            }
+        }
+        cur.swap(next);
+    }
+    std::vector<std::string> out;
+    for (auto& p : cur) {
+        std::error_code ec;
+        if (fs::exists(p, ec)) out.push_back(p.string());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 // ----------------------------------------------------------------------------- đầu vào
@@ -240,11 +464,8 @@ static std::vector<std::string> collect_inputs(const std::vector<std::string>& p
                 if (col < cells.size() && !cells[col].empty())
                     files.push_back(base.empty() ? cells[col] : (fs::path(base) / cells[col]).string());
             }
-        } else if (p.find_first_of("*?[") != std::string::npos) {
-            glob_t g;
-            if (glob(p.c_str(), 0, nullptr, &g) == 0)
-                for (size_t i = 0; i < g.gl_pathc; ++i) files.push_back(g.gl_pathv[i]);
-            globfree(&g);
+        } else if (p.find_first_of("*?") != std::string::npos) {
+            for (auto& f : expand_glob(p)) files.push_back(f);
         } else {
             files.push_back(p);
         }
@@ -527,6 +748,9 @@ int main(int argc, char** argv) {
         usage();
         return 2;
     }
+#ifdef _WIN32
+    if (!fs::is_regular_file(a.bin) && fs::is_regular_file(a.bin + ".exe")) a.bin += ".exe";
+#endif
     if (!fs::is_regular_file(a.bin)) {
         std::cerr << "không thấy CLI: " << a.bin << " (build trước, hoặc sửa --bin)\n";
         return 2;
