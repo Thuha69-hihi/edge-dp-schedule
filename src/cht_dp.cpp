@@ -6,12 +6,12 @@
 //   DP(i,j) = a*S_i^2 + b*S_i + E_on + min_k { (-2a*S_k) * S_i + [DP(k,j-1) + a*S_k^2 - b*S_k + eps*d_k] }
 // Hệ số góc -2a*S_k giảm dần theo k, điểm truy vấn S_i tăng dần -> deque, O(1) khấu hao.
 //
-#pragma once
+
 #include <vector>
 #include <deque>
 #include <algorithm>
-#include "types.hpp"
-#include "cost.hpp"
+#include "edgedp/solver.hpp"
+#include "edgedp/types.hpp"
 
 namespace edgedp {
 
