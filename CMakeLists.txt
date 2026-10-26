@@ -9,13 +9,23 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 file(GLOB LIB_SRC src/*.cpp)
-list(REMOVE_ITEM LIB_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+list(REMOVE_ITEM LIB_SRC
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/main_heuristics.cpp)
 
 add_library(edgedp_lib ${LIB_SRC})
-target_include_directories(edgedp_lib PUBLIC include PRIVATE src)
+target_include_directories(edgedp_lib PUBLIC include src)
+
+add_executable(edgedp_heur src/main_heuristics.cpp)
+target_link_libraries(edgedp_heur edgedp_lib)
 
 add_executable(edgedp src/main.cpp)
 target_link_libraries(edgedp edgedp_lib)
+
+if(UNIX)
+  add_executable(run_bench bench/run_bench.cpp src/json.cpp)
+  target_include_directories(run_bench PRIVATE src)
+endif()
 
 enable_testing()
 add_executable(run_tests tests/test_main.cpp)
