@@ -7,69 +7,65 @@
 // Hệ số góc -2a*S_k giảm dần theo k, điểm truy vấn S_i tăng dần -> deque, O(1) khấu hao.
 //
 
+#include "edgedp/solver.hpp"
+#include "edgedp/types.hpp"
+#include "edgedp/cost.hpp"
 #include <vector>
 #include <deque>
 #include <algorithm>
-#include "edgedp/solver.hpp"
-#include "edgedp/types.hpp"
+#include <cmath>
 
 namespace edgedp {
 
-// Cấu trúc đại diện cho đường thẳng y = m * x + c
 struct Line {
     ld m, c;
-    int k; // Lưu lại chỉ số k để phục vụ truy vết điểm cắt
+    int k;
 
     ld eval(ld x) const {
         return m * x + c;
     }
 
-    // Tính tọa độ x là giao điểm của đường thẳng hiện tại với đường thẳng next Line
     ld intersect(const Line& other) const {
         return (other.c - c) / (m - other.m);
     }
 };
 
-class CHTSolver {
-private:
-    const Instance& in;
-    CostModel cost_model;
+Solution solve_cht(const Instance& in) {
+    if (in.n <= 0 || in.m <= 0) {
+        return {in.n == 0, 0.0, 0, {}, {}, "cht", 0.0};
+    }
 
-public:
-    explicit CHTSolver(const Instance& instance) 
-        : in(instance), cost_model(instance) {}
+    CostModel cm(in);
+    int n = in.n;
+    int M = in.m;
 
-    // Hàm giải bài toán DP với CHT, trả về chi phí tối ưu và vị trí cắt để truy vết
-    std::pair<ld, std::vector<int>> solve(int M) {
-        int n = in.n;
-        std::vector<std::vector<ld>> dp(M + 1, std::vector<ld>(n + 1, inf()));
-        std::vector<std::vector<int>> parent(M + 1, std::vector<int>(n + 1, -1));
+    // dp[j][i]: chi phí tối ưu dùng tối đa j node cho i tác vụ đầu tiên
+    std::vector<std::vector<ld>> dp(M + 1, std::vector<ld>(n + 1, inf()));
+    std::vector<std::vector<int>> parent(M + 1, std::vector<int>(n + 1, -1));
 
-        dp[0][0] = 0;
+    dp[0][0] = 0.0;
+    ld a = in.params.kappa_over_T2;
 
-        // Giả định hệ số quadratic 'a' cho mô hình bậc hai E_exec = a * W^2
-        // Lấy hệ số a từ tham số params
-        ld a = in.params.kappa_over_T2; 
+    for (int j = 1; j <= M; ++j) {
+        std::deque<Line> cht;
 
-        for (int j = 1; j <= M; ++j) {
-            std::deque<Line> cht;
-
-            for (int k = 0; k < n; ++k) {
-                // Chỉ thêm vào CHT các trạng thái k hợp lệ ở bước (j-1)
-                if (dp[j - 1][k] < inf()) {
-                    ld S_k = static_cast<ld>(cost_model.S[k]);
-                    
-                    // Với E_exec = a * (S_i - S_k)^2 = a * S_i^2 - 2a * S_k * S_i + a * S_k^2
-                    // Line: m = -2 * a * S_k, c = dp[j-1][k] + a * S_k^2 + e_on + eps * d[k]
+        for (int i = 1; i <= n; ++i) {
+            // 1. Thêm các trạng thái k hợp lệ từ bước trước vào CHT (k < i thỏa mãn điều kiện cap)
+            // Để đảm bảo S_i - S_k <= cap
+            int prev_k = i - 1; 
+            if (dp[j - 1][prev_k] < inf()) {
+                // Kiểm tra ràng buộc link_cap nếu k >= 1
+                bool valid_link = (prev_k == 0) || (static_cast<ld>(in.d[prev_k]) <= in.params.link_cap);
+                if (valid_link) {
+                    ld S_k = static_cast<ld>(cm.S[prev_k]);
                     ld m_val = -2.0 * a * S_k;
-                    ld c_val = dp[j - 1][k] + a * S_k * S_k + in.params.e_on;
-                    if (k >= 1) {
-                        c_val += in.params.eps * static_cast<ld>(in.d[k]);
+                    ld c_val = dp[j - 1][prev_k] + a * S_k * S_k + in.params.e_on;
+                    if (prev_k >= 1) {
+                        c_val += in.params.eps * static_cast<ld>(in.d[prev_k]);
                     }
 
-                    Line new_line = {m_val, c_val, k};
+                    Line new_line = {m_val, c_val, prev_k};
 
-                    // Loại bỏ các đường thẳng không thuộc Convex Hull ở cuối deque
                     while (cht.size() >= 2) {
                         const Line& l1 = cht[cht.size() - 2];
                         const Line& l2 = cht.back();
@@ -81,49 +77,88 @@ public:
                     }
                     cht.push_back(new_line);
                 }
+            }
 
-                // Truy vấn tại x = S_i (với i = k + 1)
-                int i = k + 1;
-                ld S_i = static_cast<ld>(cost_model.S[i]);
+            ld S_i = static_cast<ld>(cm.S[i]);
 
-                if (!cht.empty()) {
-                    // Loại bỏ các đường thẳng ở đầu deque không còn tối ưu cho S_i
-                    while (cht.size() >= 2 && cht[0].eval(S_i) >= cht[1].eval(S_i)) {
-                        cht.pop_front();
-                    }
+            // 2. Truy vấn CHT tại S_i để tìm k tối ưu
+            while (cht.size() >= 2 && cht[0].eval(S_i) >= cht[1].eval(S_i)) {
+                cht.pop_front();
+            }
 
-                    // Kiểm tra các ràng buộc cap và link_cap
-                    int best_k = cht.front().k;
-                    ld W = static_cast<ld>(cost_model.work(best_k, i));
+            if (!cht.empty()) {
+                // Duyệt qua các đường thẳng trong deque để tìm k thỏa mãn ràng buộc cap (W <= cap)
+                // Do S_i tăng dần, nếu phần tử đầu tiên vi phạm cap, ta có thể cần xem xét các phần tử tiếp theo
+                for (size_t idx = 0; idx < cht.size(); ++idx) {
+                    int best_k = cht[idx].k;
+                    ll work_val = cm.work(best_k, i);
 
-                    if (W <= in.params.cap && (best_k == 0 || static_cast<ld>(in.d[best_k]) <= in.params.link_cap)) {
-                        ld current_cost = cht.front().eval(S_i) + a * S_i * S_i;
+                    if (static_cast<ld>(work_val) <= in.params.cap) {
+                        ld current_cost = cht[idx].eval(S_i) + a * S_i * S_i;
                         if (best_k == 0) {
                             current_cost += in.params.eps * static_cast<ld>(in.d[0]);
                         }
-                        
-                        dp[j][i] = current_cost;
-                        parent[j][i] = best_k;
+
+                        if (current_cost < dp[j][i]) {
+                            dp[j][i] = current_cost;
+                            parent[j][i] = best_k;
+                        }
+                        break; // Tìm thấy đường thẳng hợp lệ tối ưu đầu tiên nhờ tính đơn điệu
                     }
                 }
             }
         }
-
-        // Truy vết nghiệm cắt đoạn
-        std::vector<int> cuts;
-        int curr = n;
-        int curr_j = M;
-        while (curr > 0 && curr_j > 0) {
-            int p = parent[curr_j][curr];
-            if (p == -1) break;
-            cuts.push_back(p);
-            curr = p;
-            curr_j--;
-        }
-        std::reverse(cuts.begin(), cuts.end());
-
-        return {dp[M][n], cuts};
     }
-};
+
+    // Tìm số lượng node j* sử dụng cho tổng n tác vụ mang lại chi phí nhỏ nhất
+    int best_j = -1;
+    ld min_total_cost = inf();
+    for (int j = 1; j <= M; ++j) {
+        if (dp[j][n] < min_total_cost) {
+            min_total_cost = dp[j][n];
+            best_j = j;
+        }
+    }
+
+    if (min_total_cost == inf() || best_j == -1) {
+        return {false, 0.0, 0, {}, {}, "cht", 0.0};
+    }
+
+    // Truy vết lại các điểm cắt và phân đoạn (segments)
+    std::vector<int> cuts;
+    std::vector<Segment> segments;
+    int curr = n;
+    int curr_j = best_j;
+
+    while (curr > 0 && curr_j > 0) {
+        int p = parent[curr_j][curr];
+        if (p == -1) break;
+        if (curr < n) {
+            cuts.push_back(curr);
+        }
+        curr = p;
+        curr_j--;
+    }
+    std::reverse(cuts.begin(), cuts.end());
+
+    // Xây dựng chi tiết các segment
+    int prev_pos = 0;
+    for (int cut_pt : cuts) {
+        segments.push_back({prev_pos + 1, cut_pt, cm.work(prev_pos, cut_pt), cm.cost(prev_pos, cut_pt)});
+        prev_pos = cut_pt;
+    }
+    segments.push_back({prev_pos + 1, n, cm.work(prev_pos, n), cm.cost(prev_pos, n)});
+
+    Solution sol;
+    sol.feasible = true;
+    sol.energy = min_total_cost;
+    sol.nodes_used = best_j;
+    sol.cuts = cuts;
+    sol.segments = segments;
+    sol.solver = "cht";
+    sol.time_ms = 0.0;
+
+    return sol;
+}
 
 } // namespace edgedp
