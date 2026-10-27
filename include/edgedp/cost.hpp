@@ -1,7 +1,9 @@
 // Hàm chi phí một đoạn, dùng chung cho mọi solver để cả nhóm tính đúng một công thức.
 //
-//   Cost(k+1, i) = E_on + (κ/T^2) * (S_i - S_k)^3 + ε * d_k
+//   Cost(k+1, i) = E_on + E_exec(S_i - S_k) + ε * d_k
 //   = +∞ nếu S_i - S_k > cap, hoặc (k >= 1 và d_k > link_cap)
+//   E_exec(W) = (κ/T^2) * W^3        khi model = Cubic (mặc định)
+//             = a * W^2 + b * W      khi model = Quadratic (biến thể cho CHT)
 //
 // (k = 0: d_0 là dữ liệu từ thiết bị IoT, không chịu ràng buộc link_cap.)
 #pragma once
@@ -24,13 +26,19 @@ struct CostModel {
     // Khối lượng đoạn (k, i], tức τ_{k+1}..τ_i.
     ll work(int k, int i) const { return S[i] - S[k]; }
 
+    // Năng lượng thực thi của một đoạn có khối lượng W, theo mô hình đang chọn.
+    ld exec_energy(ll W) const {
+        const ld x = static_cast<ld>(W);
+        if (in.params.model == EnergyModel::Quadratic) return in.params.quad_a * x * x + in.params.quad_b * x;
+        return in.params.kappa_over_T2 * x * x * x;
+    }
+
     // C(k, i) với 0 <= k < i <= n.
     ld cost(int k, int i) const {
         const ll W = work(k, i);
         if (static_cast<ld>(W) > in.params.cap) return inf();
         if (k >= 1 && static_cast<ld>(in.d[k]) > in.params.link_cap) return inf();
-        const ld x = static_cast<ld>(W);
-        return in.params.e_on + in.params.kappa_over_T2 * x * x * x + in.params.eps * static_cast<ld>(in.d[k]);
+        return in.params.e_on + exec_energy(W) + in.params.eps * static_cast<ld>(in.d[k]);
     }
 };
 
