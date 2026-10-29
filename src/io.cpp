@@ -61,6 +61,7 @@ Instance parse_instance_json(const std::string& text) {
     in.params.link_cap = need(p, "link_cap", Json::Num).num;
 
     // Mo hinh nang luong (tuy chon, mac dinh "cubic"). Tim "model" trong params truoc, roi o goc.
+    // Voi "quadratic": E_exec(W) = quad_a*W^2 + quad_b*W; thieu quad_a thi lay kappa_over_T2, thieu quad_b thi 0.
     std::string model = "cubic";
     const Json* mj = p.get("model");
     if (!mj) mj = root.get("model");
