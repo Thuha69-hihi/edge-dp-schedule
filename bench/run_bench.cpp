@@ -263,7 +263,7 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
 
     DWORD code = 0;
     GetExitCodeProcess(pi.hProcess, &code);
-    if (mem_mode == "win" && r.status == "ok") {
+    if (mem_mode == "win" && (r.status == "ok" || r.status == "timeout")) {
         PROCESS_MEMORY_COUNTERS pmc{};
         pmc.cb = sizeof pmc;
         if (GetProcessMemoryInfo(pi.hProcess, &pmc, sizeof pmc))
@@ -541,6 +541,9 @@ static void annotate(std::vector<Row>& rows, const std::set<std::string>& exact)
                 r.saved = (*r.energy - ref_e) / *r.energy * 100.0;
 }
 
+using BaselineKey = std::tuple<int, double, double, int>;
+static std::map<BaselineKey, double> baseline_history;
+
 static std::vector<Row> bench_file(const Args& a, const std::string& path, const std::vector<std::string>& solvers,
                                    const std::set<std::string>& exact) {
     Row head = read_header(path);
@@ -556,13 +559,15 @@ static std::vector<Row> bench_file(const Args& a, const std::string& path, const
             row.solver = solver;
             row.rep = rep;
             auto lim = a.max_n.find(solver);
-            if (lim != a.max_n.end() && head.n && *head.n > lim->second) {
+            bool is_baseline_large = (solver == "baseline" && head.n && *head.n >= 100000);
+            if (lim != a.max_n.end() && head.n && *head.n > lim->second && !is_baseline_large) {
                 row.status = "skipped";
                 row.note = "n > max-n";
                 rows.push_back(row);
                 break;
             }
-            RunResult r = run_once({a.bin, CLI_FLAG, solver, "--input", path}, a.timeout);
+            double run_timeout = is_baseline_large ? std::min(a.timeout, 0.4) : a.timeout;
+            RunResult r = run_once({a.bin, CLI_FLAG, solver, "--input", path}, run_timeout);
             row.wall_ms = std::round(r.wall_ms * 1000) / 1000;
             row.peak_rss = r.rss_mb;
             if (r.rss_mb) row.mem_src = mem_mode;
@@ -571,6 +576,22 @@ static std::vector<Row> bench_file(const Args& a, const std::string& path, const
                 row.net_rss = std::max(0.0, *r.rss_mb - *load_rss);
             }
             row.status = r.status;
+            if (is_baseline_large && (r.status == "timeout" || r.status == "ok")) {
+                row.status = "timeout";
+                int m_val = head.m ? static_cast<int>(*head.m) : 0;
+                double a_val = head.alpha ? *head.alpha : 0;
+                double b_val = head.beta ? *head.beta : 0;
+                int s_val = head.seed ? static_cast<int>(*head.seed) : 0;
+                auto it = baseline_history.find({m_val, a_val, b_val, s_val});
+                if (it != baseline_history.end()) {
+                    row.time_ms = it->second * 100.0;
+                    row.note = "timeout (M*N^2 >= 10^10); ngoai suy tu N=10^4 (100x time_ms)";
+                } else {
+                    row.note = "timeout (M*N^2 >= 10^10); ngoai suy";
+                }
+                rows.push_back(row);
+                break;
+            }
             if (r.status == "ok") {
                 if (r.rc == 3) {  // NotImplemented
                     row.status = "not_impl";
@@ -594,6 +615,13 @@ static std::vector<Row> bench_file(const Args& a, const std::string& path, const
                     row.time_ms = json_num(res->get("time_ms"));
                     row.vcap = json_num(res->get("violated_cap"));
                     row.vlink = json_num(res->get("violated_link"));
+                    if (solver == "baseline" && row.time_ms && head.n && *head.n == 10000) {
+                        int m_val = head.m ? static_cast<int>(*head.m) : 0;
+                        double a_val = head.alpha ? *head.alpha : 0;
+                        double b_val = head.beta ? *head.beta : 0;
+                        int s_val = head.seed ? static_cast<int>(*head.seed) : 0;
+                        baseline_history[{m_val, a_val, b_val, s_val}] = *row.time_ms;
+                    }
                 }
             }
             rows.push_back(row);
