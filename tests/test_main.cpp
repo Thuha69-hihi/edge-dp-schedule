@@ -91,7 +91,7 @@ static ld oracle_enumerate(const Instance& in) {
     return best;
 }
 
-static Instance random_instance(std::mt19937& rng, int maxN, int maxM) {
+static Instance random_instance(std::mt19937& rng, int maxN, int maxM, EnergyModel model = EnergyModel::Cubic) {
     auto U = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
     Instance in;
     in.n = U(1, maxN);
@@ -103,6 +103,14 @@ static Instance random_instance(std::mt19937& rng, int maxN, int maxM) {
     in.params.e_on = U(0, 300);
     in.params.cap = U(8, 30);
     in.params.link_cap = U(3, 10);
+    if (model == EnergyModel::Quadratic) {
+        // a = 0 (tuyến tính) cũng là trường hợp biên: mọi đường thẳng cùng hệ số góc.
+        const double qa[] = {0.0, 0.5, 1.0, 2.0}, qb[] = {0.0, 1.0, 3.0};
+        in.params.model = EnergyModel::Quadratic;
+        in.params.quad_a = qa[U(0, 3)];
+        in.params.quad_b = qb[U(0, 2)];
+        if (U(0, 2) == 0) in.params.cap = 1e18L;  // cửa sổ không bao giờ cắt: chạy nhánh deque của CHT
+    }
     return in;
 }
 
@@ -213,6 +221,75 @@ static bool baseline_vs_oracle_random() {
     return true;
 }
 
+// ---------------- Test mô hình bậc hai (model = quadratic) ----------------
+
+static bool cost_quadratic_matches_formula() {
+    Instance in;
+    in.n = 2; in.m = 2;
+    in.w = {2, 3}; in.d = {1, 4};
+    in.params.e_on = 10; in.params.eps = 0.5L; in.params.cap = 100; in.params.link_cap = 100;
+    in.params.model = EnergyModel::Quadratic;
+    in.params.quad_a = 2; in.params.quad_b = 1;
+    CostModel cm(in);
+    CHECK(close_enough(cm.cost(0, 2), 65.5L));  // 10 + 2*25 + 1*5 + 0.5*d_0(=1)
+    CHECK(close_enough(cm.cost(1, 2), 33));     // 10 + 2*9  + 1*3 + 0.5*d_1(=4)
+    in.params.model = EnergyModel::Cubic;       // mặc định cũ không đổi: kappa/T^2 * W^3
+    in.params.kappa_over_T2 = 1;
+    CHECK(close_enough(CostModel(in).cost(1, 2), 10 + 27 + 2));
+    return true;
+}
+
+static bool json_parses_model() {
+    const std::string base = R"({"n": 2, "m": 2, "w": [1, 2], "d": [1, 1],
+      "params": {"kappa_over_T2": 3.0, "e_on": 1.0, "eps": 1.0, "cap": 9.0, "link_cap": 9.0)";
+    Instance a = parse_instance_json(base + "}}");
+    CHECK(a.params.model == EnergyModel::Cubic);  // không ghi model -> cubic
+    Instance b = parse_instance_json(base + R"(, "model": "quadratic"}})");
+    CHECK(b.params.model == EnergyModel::Quadratic && b.params.quad_a == 3.0L && b.params.quad_b == 0);  // a mặc định = κ/T²
+    Instance c = parse_instance_json(base + R"(, "model": "quadratic", "quad_a": 0.5, "quad_b": 2}})");
+    CHECK(c.params.quad_a == 0.5L && c.params.quad_b == 2.0L);
+    bool threw = false;
+    try { parse_instance_json(base + R"(, "model": "linear"}})"); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+    threw = false;
+    try { parse_instance_json(base + R"(, "model": "quadratic", "quad_a": -1}})"); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+    return true;
+}
+
+static bool cht_rejects_cubic() {
+    bool threw = false;
+    try { solve_cht(example_n5()); } catch (const NotImplemented&) { threw = true; }
+    CHECK(threw);  // CHT chỉ đúng cho bậc hai, không được âm thầm cho đáp án sai
+    return true;
+}
+
+// Hai nhánh của CHT trên input lớn hơn: có cửa sổ cap (cây bao lồi) và không có (deque), so với baseline.
+static bool cht_larger_inputs() {
+    std::mt19937 rng(77);
+    auto U = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
+    for (int t = 0; t < 120; ++t) {
+        Instance in;
+        in.n = U(100, 400); in.m = U(1, 8);
+        ll tot = 0;
+        for (int i = 0; i < in.n; ++i) { in.w.push_back(U(0, 20)); in.d.push_back(U(0, 10)); tot += in.w.back(); }
+        in.params.model = EnergyModel::Quadratic;
+        in.params.quad_a = U(0, 3) * 0.5L;
+        in.params.quad_b = U(0, 4);
+        in.params.e_on = U(0, 5000);
+        in.params.eps = U(0, 3) * 0.5L;
+        in.params.link_cap = U(4, 11);
+        const int mode = t % 3;  // 0: cap chặt, 1: cap vừa, 2: không cắt cửa sổ
+        const ll per = tot / std::max(1, in.m);
+        in.params.cap = (mode == 0) ? per + 25 : (mode == 1) ? 2 * per + 25 : tot + 1;
+        Solution ref = solve_baseline(in), got = solve_cht(in);
+        CHECK(got.feasible == ref.feasible);
+        if (ref.feasible) CHECK(close_enough(got.energy, ref.energy));
+        CHECK(valid_solution(in, got));
+    }
+    return true;
+}
+
 // ---------------- Test I/O JSON ----------------
 
 static bool json_roundtrip_example() {
@@ -258,22 +335,23 @@ static bool json_infeasible_prints_null() {
 
 // ---------------- Đối chiếu solver khác với baseline (SKIP nếu chưa cài) ----------------
 
-// Việc 2.04 của TV4 quy định chỉ dùng brute force cho N ≤ 12 để đối chiếu. Vì cross_check
-// đi cùng cả solver khác (D&C), ta giữ N ≤ 12 cho mọi solver trong cross_check để tránh
-// brutal O(2^(N-1)) treo máy.
-static bool cross_check(SolverFn fn) {
+// Brute force là O(2^(N-1)) nên chỉ cho N <= 12 (việc 2.04 của TV4); D&C và CHT thử tới N = 40.
+// model: cubic hoặc quadratic. CHT chỉ hỗ trợ quadratic: với cubic nó ném NotImplemented -> SKIP.
+static bool cross_check(SolverFn fn, int max_n, EnergyModel model) {
     std::mt19937 rng(2026);
     for (int t = 0; t < 400; ++t) {
-        Instance in = random_instance(rng, 12, 5);  // N<=12, M<=5
+        Instance in = random_instance(rng, max_n, 5, model);
         Solution ref = solve_baseline(in);
         Solution got = fn(in);  // có thể ném NotImplemented -> SKIP
         CHECK(got.feasible == ref.feasible);
         if (ref.feasible) CHECK(close_enough(got.energy, ref.energy));  // so energy, không so cuts
         CHECK(valid_solution(in, got));
     }
-    // Ví dụ trong tài liệu cũng phải ra 973.
-    Solution e = fn(example_n5());
-    CHECK(e.feasible && close_enough(e.energy, 973));
+    // Ví dụ trong tài liệu (cubic) phải ra 973.
+    if (model == EnergyModel::Cubic) {
+        Solution e = fn(example_n5());
+        CHECK(e.feasible && close_enough(e.energy, 973));
+    }
     return true;
 }
 
@@ -304,10 +382,18 @@ int main() {
     run("json_roundtrip_example", json_roundtrip_example);
     run("json_rejects_bad_input", json_rejects_bad_input);
     run("json_infeasible_prints_null", json_infeasible_prints_null);
+    run("cost_quadratic_matches_formula", cost_quadratic_matches_formula);
+    run("json_parses_model", json_parses_model);
+    run("cht_rejects_cubic", cht_rejects_cubic);
+    run("cht_larger_inputs", cht_larger_inputs);
 
     for (const auto& s : all_solvers()) {
         if (std::string(s.name) == "baseline") continue;
-        run(std::string("cross_check_") + s.name + "_vs_baseline", [&] { return cross_check(s.fn); });
+        const int max_n = std::string(s.name) == "bruteforce" ? 12 : 40;
+        run(std::string("cross_check_") + s.name + "_vs_baseline",
+            [&] { return cross_check(s.fn, max_n, EnergyModel::Cubic); });
+        run(std::string("cross_check_") + s.name + "_vs_baseline_quadratic",
+            [&] { return cross_check(s.fn, max_n, EnergyModel::Quadratic); });
     }
 
     std::cout << "\nTong ket: " << g_pass << " pass, " << g_fail << " fail, " << g_skip << " skip\n";

@@ -15,12 +15,21 @@ namespace edgedp {
 using ll = long long;       // w, S, d, chỉ số
 using ld = long double;     // năng lượng (đã chốt đề xuất ở mục 9, câu 4)
 
+// Mô hình năng lượng thực thi E_exec(W) của một đoạn có khối lượng W (quyết định họp tuần 1, mục 9 câu 1):
+//   Cubic     : E_exec(W) = (κ/T²)·W³        (DVFS, mô hình chính, dùng D&C)
+//   Quadratic : E_exec(W) = a·W² + b·W      (biến thể, a >= 0, để dùng được Convex Hull Trick)
+enum class EnergyModel { Cubic, Quadratic };
+
 struct Params {
-    ld kappa_over_T2 = 1.0;  // κ / T^2
+    ld kappa_over_T2 = 1.0;  // κ / T^2 (chỉ dùng khi model = Cubic)
     ld e_on = 0.0;           // E_on: năng lượng bật một node trong một chu kỳ
     ld eps = 0.0;            // ε = P_tx / B (J/bit)
     ld cap = 0.0;            // f_max * T: khối lượng tối đa của một đoạn
     ld link_cap = 0.0;       // B * T: dữ liệu tối đa truyền qua một chỗ cắt
+    // Thêm ở cuối để các chỗ khởi tạo theo thứ tự {κ/T², E_on, ε, cap, link_cap} vẫn đúng.
+    EnergyModel model = EnergyModel::Cubic;
+    ld quad_a = 0.0;         // a (chỉ dùng khi model = Quadratic), a >= 0
+    ld quad_b = 0.0;         // b (chỉ dùng khi model = Quadratic)
 };
 
 struct Instance {
@@ -57,3 +66,4 @@ struct NotImplemented : std::logic_error {
 };
 
 }  // namespace edgedp
+

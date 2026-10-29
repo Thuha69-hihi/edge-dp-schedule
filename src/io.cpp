@@ -60,6 +60,34 @@ Instance parse_instance_json(const std::string& text) {
     in.params.cap = need(p, "cap", Json::Num).num;
     in.params.link_cap = need(p, "link_cap", Json::Num).num;
 
+    // Mo hinh nang luong (tuy chon, mac dinh "cubic"). Tim "model" trong params truoc, roi o goc.
+    // Voi "quadratic": E_exec(W) = quad_a*W^2 + quad_b*W; thieu quad_a thi lay kappa_over_T2, thieu quad_b thi 0.
+    std::string model = "cubic";
+    const Json* mj = p.get("model");
+    if (!mj) mj = root.get("model");
+    if (mj) {
+        if (mj->type != Json::Str) throw std::runtime_error("sai kieu o truong: model (can chuoi)");
+        model = mj->str;
+    }
+    if (model == "cubic") {
+        in.params.model = EnergyModel::Cubic;
+    } else if (model == "quadratic") {
+        in.params.model = EnergyModel::Quadratic;
+        in.params.quad_a = in.params.kappa_over_T2;
+        in.params.quad_b = 0;
+        if (const Json* qa = p.get("quad_a")) {
+            if (qa->type != Json::Num) throw std::runtime_error("sai kieu o truong: quad_a");
+            in.params.quad_a = qa->num;
+        }
+        if (const Json* qb = p.get("quad_b")) {
+            if (qb->type != Json::Num) throw std::runtime_error("sai kieu o truong: quad_b");
+            in.params.quad_b = qb->num;
+        }
+        if (in.params.quad_a < 0) throw std::runtime_error("quad_a phai >= 0 (ham nang luong loi)");
+    } else {
+        throw std::runtime_error("model khong hop le (cubic | quadratic): " + model);
+    }
+
     if (const Json* s = root.get("seed")) if (s->type == Json::Num) in.seed = static_cast<ll>(s->num);
     if (const Json* s = root.get("source")) if (s->type == Json::Str) in.source = s->str;
     return in;
@@ -93,3 +121,4 @@ std::string solution_to_json(const Solution& s) {
 }
 
 }  // namespace edgedp
+

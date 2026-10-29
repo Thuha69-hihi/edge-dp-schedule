@@ -3,7 +3,7 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Iinclude
 LIB_SRC  := $(filter-out src/main.cpp src/main_heuristics.cpp,$(wildcard src/*.cpp))
 BUILD    := build
 
-all: $(BUILD)/edgedp $(BUILD)/run_tests $(BUILD)/brute_force_exec
+all: $(BUILD)/edgedp $(BUILD)/edgedp_heur $(BUILD)/run_bench $(BUILD)/run_tests $(BUILD)/brute_force_exec
 
 $(BUILD)/edgedp: $(LIB_SRC) src/main.cpp $(wildcard src/*.hpp include/edgedp/*.hpp)
 	@mkdir -p $(BUILD)
