@@ -12,3 +12,7 @@ jobs:
         run: make
       - name: Unit tests
         run: make test
+      - name: Differential tests (pytest)
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/unittest2 -q
