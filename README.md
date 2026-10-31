@@ -106,6 +106,8 @@ Hoặc dùng CMake (Windows/Visual Studio, CLion):
 cmake -S . -B build && cmake --build build && ctest --test-dir build
 ```
 
+Đo độ phủ kiểm thử: `make coverage` (cần `pip install gcovr`), hiện 99% dòng và 95% nhánh; chi tiết ở [docs/coverage.md](docs/coverage.md).
+
 CI trên GitHub Actions chạy đúng ba bước `make`, `make test`, `pytest` cho mỗi Pull Request.
 
 ## Chạy solver

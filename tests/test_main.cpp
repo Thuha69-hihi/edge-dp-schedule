@@ -8,8 +8,10 @@
 #include <vector>
 
 #include "edgedp/cost.hpp"
+#include "edgedp/heuristics.hpp"
 #include "edgedp/solver.hpp"
 #include "io.hpp"
+#include "json.hpp"
 
 using namespace edgedp;
 
@@ -374,6 +376,195 @@ static bool json_infeasible_prints_null() {
     return true;
 }
 
+
+// ---------------- Test biên bổ sung (việc 7.02) ----------------
+
+// Bản bậc hai của ví dụ chuẩn (a = 1, b = 0): mọi solver chính xác cho 579.
+static Instance example_n5_quadratic() {
+    Instance in = example_n5();
+    in.params.model = EnergyModel::Quadratic;
+    in.params.quad_a = 1.0;
+    in.params.quad_b = 0.0;
+    return in;
+}
+
+// N = 0 và M = 0 cho MỌI solver (trước đây chỉ kiểm baseline).
+static bool all_solvers_empty_and_no_nodes() {
+    for (const auto& sv : all_solvers()) {
+        Instance in = example_n5_quadratic();  // bậc hai để cả cht chạy được
+        in.n = 0;
+        in.w.clear();
+        in.d.clear();
+        Solution s = sv.fn(in);
+        CHECK(s.feasible && s.energy == 0 && s.nodes_used == 0 && s.segments.empty());
+        Instance in2 = example_n5_quadratic();
+        in2.m = 0;
+        CHECK(!sv.fn(in2).feasible);
+    }
+    return true;
+}
+
+static bool example_quadratic_all_solvers() {
+    for (const auto& sv : all_solvers()) {
+        Solution s = sv.fn(example_n5_quadratic());
+        CHECK(s.feasible && close_enough(s.energy, 579) && s.nodes_used == 2);
+        CHECK(s.cuts == std::vector<int>({2}));
+        CHECK(valid_solution(example_n5_quadratic(), s));
+    }
+    return true;
+}
+
+static bool bruteforce_rejects_large_n() {
+    Instance in;
+    in.n = 19;
+    in.m = 2;
+    in.w.assign(19, 1);
+    in.d.assign(19, 0);
+    in.params = {1.0L, 1.0L, 1.0L, 100.0L, 100.0L};
+    bool threw = false;
+    try {
+        solve_bruteforce(in);
+    } catch (const NotImplemented&) { threw = true; }  // bắt tại đây, nếu không run() tính là SKIP
+    CHECK(threw);
+    return true;
+}
+
+static bool cht_rejects_negative_a() {
+    Instance in = example_n5_quadratic();
+    in.params.quad_a = -1.0;
+    bool threw = false;
+    try {
+        solve_cht(in);
+    } catch (const std::invalid_argument&) { threw = true; }
+    CHECK(threw);
+    return true;
+}
+
+// Bốn heuristic trên ví dụ chuẩn (khớp bảng của edgedp_heur trong README).
+static bool heuristics_example_values() {
+    const Instance in = example_n5();
+    HeuristicResult g = solve_greedy(in);
+    CHECK(g.feasible && close_enough(g.energy, 973) && g.nodes_used == 2);
+    HeuristicResult e = solve_equal_split(in);
+    CHECK(!e.feasible && close_enough(e.energy, 1051) && e.nodes_used == 3 && e.violated_link == 1);
+    HeuristicResult o = solve_single_node(in);
+    CHECK(!o.feasible && close_enough(o.energy, 1981) && o.nodes_used == 1 && o.violated_cap == 1);
+    HeuristicResult r = solve_round_robin(in);
+    CHECK(!r.feasible && close_enough(r.energy, 1108) && r.nodes_used == 3 && r.cuts.empty());
+    CHECK(heuristic_names().size() == 4);
+    for (const auto& name : heuristic_names()) CHECK(solve_heuristic(name, in).name == name);
+    bool threw = false;
+    try {
+        solve_heuristic("khong_co", in);
+    } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+    return true;
+}
+
+// N = 0: mọi heuristic khả thi với năng lượng 0; M = 0 mà còn việc: không khả thi.
+static bool heuristics_trivial_cases() {
+    Instance empty = example_n5();
+    empty.n = 0;
+    empty.w.clear();
+    empty.d.clear();
+    Instance none = example_n5();
+    none.m = 0;
+    for (const auto& name : heuristic_names()) {
+        HeuristicResult a = solve_heuristic(name, empty);
+        CHECK(a.feasible && a.energy == 0 && a.nodes_used == 0);
+        CHECK(!solve_heuristic(name, none).feasible);
+    }
+    return true;
+}
+
+// Heuristic nào khả thi cũng không được rẻ hơn nghiệm tối ưu, và năng lượng của heuristic
+// liên tiếp phải bằng tổng chi phí các đoạn theo điểm cắt nó báo.
+static bool heuristics_never_beat_optimum() {
+    std::mt19937 rng(7020);
+    for (int it = 0; it < 300; ++it) {
+        Instance in;
+        in.n = 1 + static_cast<int>(rng() % 30);
+        in.m = 1 + static_cast<int>(rng() % 6);
+        ll sum = 0;
+        for (int i = 0; i < in.n; ++i) {
+            in.w.push_back(1 + static_cast<ll>(rng() % 20));
+            in.d.push_back(static_cast<ll>(rng() % 10));
+            sum += in.w.back();
+        }
+        const ld cap = static_cast<ld>(sum) * (0.3L + (rng() % 100) / 100.0L);
+        in.params = {1.0L, static_cast<ld>(rng() % 500), 1.0L, cap, static_cast<ld>(rng() % 10)};
+        const Solution opt = solve_baseline(in);
+        for (const auto& name : heuristic_names()) {
+            const HeuristicResult h = solve_heuristic(name, in);
+            // Round-robin không giao đoạn liên tiếp (ngoài mô hình pipeline) nên có thể rẻ hơn
+            // nghiệm tối ưu của bài toán chia chuỗi; chỉ so ba heuristic liên tiếp.
+            if (h.feasible && name != "roundrobin") {
+                CHECK(opt.feasible);
+                CHECK(h.energy >= opt.energy - 1e-9L * std::max<ld>(1, opt.energy));
+            }
+            if (name != "roundrobin" && h.feasible) {
+                CostModel cm(in);
+                ld total = 0;
+                int prev = 0;
+                std::vector<int> ends = h.cuts;
+                ends.push_back(in.n);
+                for (int c : ends) {
+                    total += cm.cost(prev, c);
+                    prev = c;
+                }
+                CHECK(close_enough(total, h.energy));
+                CHECK(static_cast<int>(ends.size()) == h.nodes_used);
+            }
+        }
+    }
+    return true;
+}
+
+// Bộ đọc JSON: literal, mảng/đối tượng rỗng, escape, số âm và số mũ; các lỗi cú pháp.
+static bool json_parser_edge_cases() {
+    Json j = parse_json(R"( {"a": true, "b": false, "c": null, "e": [], "o": {},
+                             "s": "x\n\t\"\\\/y", "x": -1.5e2, "arr": [1, [2, 3]]} )");
+    CHECK(j.type == Json::Obj);
+    CHECK(j.get("a")->type == Json::Bool && j.get("a")->b);
+    CHECK(j.get("b")->type == Json::Bool && !j.get("b")->b);
+    CHECK(j.get("c")->type == Json::Null);
+    CHECK(j.get("e")->type == Json::Arr && j.get("e")->arr.empty());
+    CHECK(j.get("o")->type == Json::Obj && j.get("o")->obj.empty());
+    CHECK(j.get("s")->str == "x\n\t\"\\/y");
+    CHECK(parse_json("\"a\\u00e9b\\r\\b\\f\"").str == "a?b\r\b\f");  // \u thay bằng '?' (không cần unicode)
+    CHECK(close_enough(j.get("x")->num, -150));
+    CHECK(j.get("arr")->arr.size() == 2 && j.get("arr")->arr[1].arr.size() == 2);
+    CHECK(j.get("khong_co") == nullptr);
+    for (const char* bad : {"[1, 2", "{\"a\" 1}", "\"chua dong", "\"\\", "tru", "1 2", "{\"a\": }", ""}) {
+        bool threw = false;
+        try {
+            parse_json(bad);
+        } catch (const std::exception&) { threw = true; }
+        CHECK(threw);
+    }
+    return true;
+}
+
+// Đọc instance: từ chối số âm, số thực, phần tử không phải số, n/m âm.
+static bool instance_json_rejects_invalid_values() {
+    const char* bads[] = {
+        R"({"n": 1, "m": 1, "w": [-1], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 1, "link_cap": 1}})",
+        R"({"n": 1, "m": 1, "w": [1.5], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 1, "link_cap": 1}})",
+        R"({"n": 1, "m": 1, "w": ["a"], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 1, "link_cap": 1}})",
+        R"({"n": 1, "m": -1, "w": [1], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 1, "link_cap": 1}})",
+        R"({"n": 1, "m": 1, "w": [1], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 1}})",
+        R"({"n": 2, "m": 1, "w": [1, 1], "d": [0], "params": {"kappa_over_T2": 1, "e_on": 1, "eps": 1, "cap": 9, "link_cap": 1}})",
+    };
+    for (const char* b : bads) {
+        bool threw = false;
+        try {
+            parse_instance_json(b);
+        } catch (const std::exception&) { threw = true; }
+        CHECK(threw);
+    }
+    return true;
+}
+
 // ---------------- Đối chiếu solver khác với baseline (SKIP nếu chưa cài) ----------------
 
 // Brute force là O(2^(N-1)) nên chỉ cho N <= 12 (việc 2.04 của TV4); D&C và CHT thử tới N = 40.
@@ -432,6 +623,15 @@ int main() {
     run("json_parses_model", json_parses_model);
     run("cht_rejects_cubic", cht_rejects_cubic);
     run("cht_larger_inputs", cht_larger_inputs);
+    run("all_solvers_empty_and_no_nodes", all_solvers_empty_and_no_nodes);
+    run("example_quadratic_all_solvers", example_quadratic_all_solvers);
+    run("bruteforce_rejects_large_n", bruteforce_rejects_large_n);
+    run("cht_rejects_negative_a", cht_rejects_negative_a);
+    run("heuristics_example_values", heuristics_example_values);
+    run("heuristics_trivial_cases", heuristics_trivial_cases);
+    run("heuristics_never_beat_optimum", heuristics_never_beat_optimum);
+    run("json_parser_edge_cases", json_parser_edge_cases);
+    run("instance_json_rejects_invalid_values", instance_json_rejects_invalid_values);
 
     for (const auto& s : all_solvers()) {
         if (std::string(s.name) == "baseline") continue;
