@@ -1,6 +1,6 @@
 # Kịch bản demo (7.05)
 
-Thời lượng dự kiến: 3–4 phút. Chạy từ thư mục gốc repo (đã `git checkout v1.0` hoặc `main` sau khi merge 5.03).
+Thời lượng dự kiến: 3–4 phút. Chạy từ thư mục gốc repo (đã `git checkout v1.0` hoặc `main`).
 Chuẩn bị trước (làm một lần, ngoài giờ trình bày): `make` và kiểm tra `bash scripts/demo.sh` chạy được.
 
 ## Lệnh chạy
@@ -32,4 +32,4 @@ Số trên máy nhóm có thể khác; lấy số liệu chính thức từ `res
 ## Rủi ro khi demo trực tiếp
 * Máy trình bày không có g++ → build sẵn trước, hoặc dùng video dự phòng.
 * Baseline N = 10^5 mất khoảng 1 phút → mặc định không chạy trực tiếp, chỉ chiếu video.
-* Thiếu `data/synthetic_quadratic` → bước 3 in thông báo và bỏ qua; kiểm tra đã merge PR #12.
+* Thiếu `data/synthetic_quadratic`
