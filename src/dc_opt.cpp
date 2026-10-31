@@ -16,7 +16,7 @@ struct Layer {
     const CostModel& cm;
     const vector<ld>& prev;
     vector<ld>& cur;
-    vector<int>& cur_opt;
+    int* cur_opt;
     const vector<int>& P;      // ứng viên k, tăng dần
     const vector<int>& rows;   // các hàng i khả thi, tăng dần
     const vector<int>& pl;     // pl[r], pr[r]: cửa sổ chỉ số P của hàng rows[r]
@@ -86,7 +86,9 @@ Solution solve_dc(const Instance& in) {
 
     vector<ld> prev(n + 1, INF), cur(n + 1, INF);
     prev[0] = 0;
-    vector<vector<int>> opt(m + 1, vector<int>(n + 1, -1));
+    // Bảng opt phẳng một khối liên tục (thay vector<vector<int>>): ít cấp phát, truy cập liền kề.
+    vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
+    const auto OPT = [&](int j, int i) -> int* { return opt.data() + static_cast<size_t>(j) * (n + 1) + i; };
     vector<ld> energy_per_j(m + 1, INF);
 
     vector<int> P, rows, pl, pr;
@@ -116,7 +118,7 @@ Solution solve_dc(const Instance& in) {
         }
 
         if (!rows.empty()) {
-            const Layer layer{cm, prev, cur, opt[j], P, rows, pl, pr};
+            const Layer layer{cm, prev, cur, OPT(j, 0), P, rows, pl, pr};
             layer.compute(0, static_cast<int>(rows.size()) - 1, 0, sz - 1);
         }
 
@@ -138,7 +140,7 @@ Solution solve_dc(const Instance& in) {
     vector<int> ends;
     int i = n;
     for (int j = jbest; j >= 1; --j) {
-        const int k = opt[j][i];
+        const int k = *OPT(j, i);
         ends.push_back(i);
         i = k;
     }
