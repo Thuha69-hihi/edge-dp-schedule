@@ -13,13 +13,14 @@
 //
 // Hai ràng buộc làm tập k hợp lệ của hàng i bị thu hẹp:
 //   * link_cap: k >= 1 mà d_k > link_cap thì k không bao giờ được cắt -> không đưa đường k vào.
-//   * cap: chỉ được dùng k trong cửa sổ [lo(i), i-1], lo(i) = k nhỏ nhất có S_i - S_k <= cap. lo(i) không giảm.
+//   * cap: chỉ được dùng k trong cửa sổ [lo(i), i-1], lo(i) = k nhỏ nhất có S_i - S_k <= cap. lo(i) không
+//   giảm.
 //
 // Có hai cách chạy, chọn theo cap:
 //   1) Cửa sổ không bao giờ cắt (S_N <= cap): deque đơn điệu, O(1) khấu hao -> O(M*N).
 //   2) Có cửa sổ: deque KHÔNG dùng được (đường bị loại khỏi bao lồi vì một đường mới hơn có thể cần lại khi
-//      đường cũ hơn hết hạn). Dùng cây phân đoạn, mỗi nút giữ bao lồi của các đường trong khoảng của nó; truy vấn
-//      [lo(i), i-1] ghép từ O(log N) nút, mỗi nút có con trỏ tiến dần theo x tăng -> O(M*N*log N).
+//      đường cũ hơn hết hạn). Dùng cây phân đoạn, mỗi nút giữ bao lồi của các đường trong khoảng của nó; truy
+//      vấn [lo(i), i-1] ghép từ O(log N) nút, mỗi nút có con trỏ tiến dần theo x tăng -> O(M*N*log N).
 // Cả hai cách đều chọn k bằng bao lồi (số thực), rồi TÍNH LẠI chi phí chính xác bằng CostModel::cost để DP
 // khớp từng bit với baseline khi chọn trùng k.
 #include <algorithm>
@@ -39,7 +40,9 @@ struct Lines {
     std::vector<char> ok;  // đường k có được dùng không (DP(k,j-1) hữu hạn và không vi phạm link_cap)
 };
 
-inline ld at(const Lines& L, int k, ld x) { return L.m[k] * x + L.c[k]; }
+inline ld at(const Lines& L, int k, ld x) {
+    return L.m[k] * x + L.c[k];
+}
 
 // Đường b nằm giữa a và nw (hệ số góc giảm dần: m_a > m_b > m_nw) có vô dụng không?
 // b vô dụng nếu nw vượt a không muộn hơn b vượt a:  x(a,nw) <= x(a,b). Nhân chéo để khỏi chia.
@@ -57,7 +60,8 @@ inline void hull_push(const Lines& L, int* st, int& cnt, int head, int nw) {
             --cnt;
         }
     }
-    while (cnt - head >= 2 && useless(L, st[cnt - 2], st[cnt - 1], nw)) --cnt;
+    while (cnt - head >= 2 && useless(L, st[cnt - 2], st[cnt - 1], nw))
+        --cnt;
     st[cnt++] = nw;
 }
 
@@ -71,7 +75,8 @@ void layer_deque(const Lines& L, const CostModel& cm, int n, const std::vector<l
         if (L.ok[knew]) hull_push(L, st.data(), cnt, head, knew);
         if (cnt == head) continue;
         const ld x = static_cast<ld>(cm.S[i]);
-        while (cnt - head >= 2 && at(L, st[head + 1], x) < at(L, st[head], x)) ++head;
+        while (cnt - head >= 2 && at(L, st[head + 1], x) < at(L, st[head], x))
+            ++head;
         const int k = st[head];
         const ld cst = cm.cost(k, i);
         if (cst == inf()) continue;
@@ -89,7 +94,10 @@ struct HullTree {
     std::vector<int> ptr;    // con trỏ truy vấn của nút (tiến dần vì x không giảm)
 
     explicit HullTree(int n_) : n(n_) {
-        while (size < n) { size <<= 1; ++levels; }
+        while (size < n) {
+            size <<= 1;
+            ++levels;
+        }
         pool.assign(static_cast<size_t>(levels + 1) * size, 0);
         start.assign(2 * static_cast<size_t>(size), 0);
         cnt.assign(2 * static_cast<size_t>(size), 0);
@@ -97,7 +105,8 @@ struct HullTree {
         for (int l = 0; l <= levels; ++l) {
             const int base = size >> l;
             for (int off = 0; off < base; ++off)
-                start[base + off] = static_cast<int>(static_cast<size_t>(l) * size + static_cast<size_t>(off) * (1u << l));
+                start[base + off] =
+                    static_cast<int>(static_cast<size_t>(l) * size + static_cast<size_t>(off) * (1u << l));
         }
     }
 
@@ -106,14 +115,18 @@ struct HullTree {
             const int v = size + k;
             ptr[v] = 0;
             cnt[v] = 0;
-            if (k < n && L.ok[k]) { pool[start[v]] = k; cnt[v] = 1; }
+            if (k < n && L.ok[k]) {
+                pool[start[v]] = k;
+                cnt[v] = 1;
+            }
         }
         for (int v = size - 1; v >= 1; --v) {
             ptr[v] = 0;
             int c = 0;
             int* st = &pool[start[v]];
             for (int u = 2 * v; u <= 2 * v + 1; ++u)
-                for (int t = 0; t < cnt[u]; ++t) hull_push(L, st, c, 0, pool[start[u] + t]);
+                for (int t = 0; t < cnt[u]; ++t)
+                    hull_push(L, st, c, 0, pool[start[u] + t]);
             cnt[v] = c;
         }
     }
@@ -130,9 +143,16 @@ struct HullTree {
             ld curv = at(L, h[p], x);
             while (p + 1 < c) {
                 const ld nx = at(L, h[p + 1], x);
-                if (nx < curv) { curv = nx; ++p; } else break;
+                if (nx < curv) {
+                    curv = nx;
+                    ++p;
+                } else
+                    break;
             }
-            if (best < 0 || curv < bestv || (curv == bestv && h[p] < best)) { bestv = curv; best = h[p]; }
+            if (best < 0 || curv < bestv || (curv == bestv && h[p] < best)) {
+                bestv = curv;
+                best = h[p];
+            }
         };
         int lo = l + size, hi = r + size + 1;
         while (lo < hi) {
@@ -145,12 +165,13 @@ struct HullTree {
     }
 };
 
-void layer_tree(HullTree& tree, const Lines& L, const CostModel& cm, int n, ld cap, const std::vector<ld>& prev,
-                std::vector<ld>& cur, int* opt) {
+void layer_tree(HullTree& tree, const Lines& L, const CostModel& cm, int n, ld cap,
+                const std::vector<ld>& prev, std::vector<ld>& cur, int* opt) {
     tree.build(L);
     int lo = 0;
     for (int i = 1; i <= n; ++i) {
-        while (lo < i && static_cast<ld>(cm.S[i] - cm.S[lo]) > cap) ++lo;
+        while (lo<i&& static_cast<ld>(cm.S[i] - cm.S[lo])> cap)
+            ++lo;
         if (lo > i - 1) continue;  // tác vụ τ_i một mình đã vượt cap
         const int k = tree.query(L, lo, i - 1, static_cast<ld>(cm.S[i]));
         if (k < 0) continue;
@@ -172,7 +193,10 @@ Solution solve_cht(const Instance& in) {
     const int n = in.n;
     const int m = in.m;
     Solution sol;
-    if (n == 0) { sol.feasible = true; return sol; }
+    if (n == 0) {
+        sol.feasible = true;
+        return sol;
+    }
     if (m == 0) return sol;
 
     const CostModel cm(in);
@@ -207,8 +231,10 @@ Solution solve_cht(const Instance& in) {
         if (!any) break;  // không còn trạng thái hữu hạn: các tầng sau cũng vô nghiệm
 
         std::fill(cur.begin(), cur.end(), INF);
-        if (windowed) layer_tree(tree, L, cm, n, P.cap, prev, cur, OPT(j, 0));
-        else layer_deque(L, cm, n, prev, cur, OPT(j, 0));
+        if (windowed)
+            layer_tree(tree, L, cm, n, P.cap, prev, cur, OPT(j, 0));
+        else
+            layer_deque(L, cm, n, prev, cur, OPT(j, 0));
         best_at_n[j] = cur[n];
         prev.swap(cur);
     }
@@ -216,7 +242,10 @@ Solution solve_cht(const Instance& in) {
     int jbest = -1;
     ld ebest = INF;
     for (int j = 1; j <= m; ++j)
-        if (best_at_n[j] < ebest) { ebest = best_at_n[j]; jbest = j; }
+        if (best_at_n[j] < ebest) {
+            ebest = best_at_n[j];
+            jbest = j;
+        }
     if (jbest < 0) return sol;  // không khả thi
 
     sol.feasible = true;

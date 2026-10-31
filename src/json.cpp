@@ -24,12 +24,25 @@ struct Parser {
     [[noreturn]] void fail(const std::string& msg) const {
         throw std::runtime_error("JSON loi o vi tri " + std::to_string(p) + ": " + msg);
     }
-    void ws() { while (p < s.size() && std::isspace(static_cast<unsigned char>(s[p]))) ++p; }
-    char peek() { ws(); if (p >= s.size()) fail("het du lieu"); return s[p]; }
-    void expect(char c) { if (peek() != c) fail(std::string("can '") + c + "'"); ++p; }
+    void ws() {
+        while (p < s.size() && std::isspace(static_cast<unsigned char>(s[p])))
+            ++p;
+    }
+    char peek() {
+        ws();
+        if (p >= s.size()) fail("het du lieu");
+        return s[p];
+    }
+    void expect(char c) {
+        if (peek() != c) fail(std::string("can '") + c + "'");
+        ++p;
+    }
     bool match(const char* lit) {
         size_t n = std::char_traits<char>::length(lit);
-        if (s.compare(p, n, lit) == 0) { p += n; return true; }
+        if (s.compare(p, n, lit) == 0) {
+            p += n;
+            return true;
+        }
         return false;
     }
 
@@ -47,8 +60,11 @@ struct Parser {
                     case 'r': out += '\r'; break;
                     case 'b': out += '\b'; break;
                     case 'f': out += '\f'; break;
-                    case 'u': p += 4; out += '?'; break;  // không cần unicode cho dữ liệu của nhóm
-                    default: out += e;                     // \" \\ \/
+                    case 'u':
+                        p += 4;
+                        out += '?';
+                        break;          // không cần unicode cho dữ liệu của nhóm
+                    default: out += e;  // \" \\ \/
                 }
             } else {
                 out += c;
@@ -63,37 +79,58 @@ struct Parser {
         Json j;
         char c = peek();
         if (c == '{') {
-            ++p; j.type = Json::Obj;
-            if (peek() == '}') { ++p; return j; }
+            ++p;
+            j.type = Json::Obj;
+            if (peek() == '}') {
+                ++p;
+                return j;
+            }
             for (;;) {
                 std::string key = string_lit();
                 expect(':');
                 j.obj.emplace_back(key, value());
-                if (peek() == ',') { ++p; continue; }
+                if (peek() == ',') {
+                    ++p;
+                    continue;
+                }
                 expect('}');
                 break;
             }
         } else if (c == '[') {
-            ++p; j.type = Json::Arr;
-            if (peek() == ']') { ++p; return j; }
+            ++p;
+            j.type = Json::Arr;
+            if (peek() == ']') {
+                ++p;
+                return j;
+            }
             for (;;) {
                 j.arr.push_back(value());
-                if (peek() == ',') { ++p; continue; }
+                if (peek() == ',') {
+                    ++p;
+                    continue;
+                }
                 expect(']');
                 break;
             }
         } else if (c == '"') {
-            j.type = Json::Str; j.str = string_lit();
-        } else if (match("true")) { j.type = Json::Bool; j.b = true; }
-        else if (match("false")) { j.type = Json::Bool; j.b = false; }
-        else if (match("null")) { j.type = Json::Null; }
-        else {
+            j.type = Json::Str;
+            j.str = string_lit();
+        } else if (match("true")) {
+            j.type = Json::Bool;
+            j.b = true;
+        } else if (match("false")) {
+            j.type = Json::Bool;
+            j.b = false;
+        } else if (match("null")) {
+            j.type = Json::Null;
+        } else {
             const char* begin = s.c_str() + p;
             char* end = nullptr;
             long double v = std::strtold(begin, &end);
             if (end == begin) fail("gia tri khong hop le");
             p += static_cast<size_t>(end - begin);
-            j.type = Json::Num; j.num = v;
+            j.type = Json::Num;
+            j.num = v;
         }
         return j;
     }

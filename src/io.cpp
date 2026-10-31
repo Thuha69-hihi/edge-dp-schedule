@@ -26,7 +26,8 @@ std::vector<ll> int_array(const Json& obj, const char* key) {
     for (const auto& x : a.arr) {
         if (x.type != Json::Num) throw std::runtime_error(std::string("phan tu khong phai so trong ") + key);
         if (x.num != std::floor(x.num)) throw std::runtime_error(std::string("can so nguyen trong ") + key);
-        if (x.num < 0) throw std::runtime_error(std::string("khong duoc am trong ") + key + " (w_i, d_i >= 0)");
+        if (x.num < 0)
+            throw std::runtime_error(std::string("khong duoc am trong ") + key + " (w_i, d_i >= 0)");
         out.push_back(static_cast<ll>(x.num));
     }
     return out;
@@ -51,7 +52,8 @@ Instance parse_instance_json(const std::string& text) {
     in.d = int_array(root, "d");
     if (in.n < 0 || in.m < 0) throw std::runtime_error("n, m phai >= 0");
     if (static_cast<int>(in.w.size()) != in.n) throw std::runtime_error("w phai co dung n phan tu");
-    if (static_cast<int>(in.d.size()) != in.n) throw std::runtime_error("d phai co dung n phan tu (d_0..d_{n-1})");
+    if (static_cast<int>(in.d.size()) != in.n)
+        throw std::runtime_error("d phai co dung n phan tu (d_0..d_{n-1})");
 
     const Json& p = need(root, "params", Json::Obj);
     in.params.kappa_over_T2 = need(p, "kappa_over_T2", Json::Num).num;
@@ -60,8 +62,9 @@ Instance parse_instance_json(const std::string& text) {
     in.params.cap = need(p, "cap", Json::Num).num;
     in.params.link_cap = need(p, "link_cap", Json::Num).num;
 
-    // Mo hinh nang luong (tuy chon, mac dinh "cubic"). Tim "model" trong params truoc, roi o goc.
-    // Voi "quadratic": E_exec(W) = quad_a*W^2 + quad_b*W; thieu quad_a thi lay kappa_over_T2, thieu quad_b thi 0.
+    // Mô hình năng lượng (tùy chọn, mặc định "cubic"). Tìm "model" trong params trước, rồi ở gốc.
+    // Với "quadratic": E_exec(W) = quad_a*W^2 + quad_b*W; thiếu quad_a thì lấy kappa_over_T2, thiếu quad_b
+    // thì 0.
     std::string model = "cubic";
     const Json* mj = p.get("model");
     if (!mj) mj = root.get("model");
@@ -88,8 +91,10 @@ Instance parse_instance_json(const std::string& text) {
         throw std::runtime_error("model khong hop le (cubic | quadratic): " + model);
     }
 
-    if (const Json* s = root.get("seed")) if (s->type == Json::Num) in.seed = static_cast<ll>(s->num);
-    if (const Json* s = root.get("source")) if (s->type == Json::Str) in.source = s->str;
+    if (const Json* s = root.get("seed"))
+        if (s->type == Json::Num) in.seed = static_cast<ll>(s->num);
+    if (const Json* s = root.get("source"))
+        if (s->type == Json::Str) in.source = s->str;
     return in;
 }
 
@@ -105,7 +110,8 @@ std::string solution_to_json(const Solution& s) {
     os << "  \"energy\": " << (s.feasible ? num(s.energy) : "null") << ",\n";
     os << "  \"nodes_used\": " << s.nodes_used << ",\n";
     os << "  \"cuts\": [";
-    for (size_t i = 0; i < s.cuts.size(); ++i) os << (i ? ", " : "") << s.cuts[i];
+    for (size_t i = 0; i < s.cuts.size(); ++i)
+        os << (i ? ", " : "") << s.cuts[i];
     os << "],\n";
     os << "  \"segments\": [";
     for (size_t i = 0; i < s.segments.size(); ++i) {
@@ -121,4 +127,3 @@ std::string solution_to_json(const Solution& s) {
 }
 
 }  // namespace edgedp
-

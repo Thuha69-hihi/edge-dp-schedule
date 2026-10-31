@@ -29,9 +29,12 @@ int main(int argc, char** argv) {
     std::string dir;
     int dp_max_n = 2000;
     for (int i = 1; i < argc; ++i) {
-        if (!std::strcmp(argv[i], "--input") && i + 1 < argc) files.push_back(argv[++i]);
-        else if (!std::strcmp(argv[i], "--dir") && i + 1 < argc) dir = argv[++i];
-        else if (!std::strcmp(argv[i], "--dp-max-n") && i + 1 < argc) dp_max_n = std::atoi(argv[++i]);
+        if (!std::strcmp(argv[i], "--input") && i + 1 < argc)
+            files.push_back(argv[++i]);
+        else if (!std::strcmp(argv[i], "--dir") && i + 1 < argc)
+            dir = argv[++i];
+        else if (!std::strcmp(argv[i], "--dp-max-n") && i + 1 < argc)
+            dp_max_n = std::atoi(argv[++i]);
         else {
             std::cerr << "Tham so khong hop le: " << argv[i] << "\n";
             return 2;
@@ -78,7 +81,8 @@ int main(int argc, char** argv) {
                   << ", seed=" << in.seed << ")\n";
         if (have_dp)
             std::cout << "DP baseline: energy=" << std::setprecision(6) << (double)dp.energy
-                      << " nodes=" << dp.nodes_used << " time=" << std::setprecision(2) << dp.time_ms << " ms\n";
+                      << " nodes=" << dp.nodes_used << " time=" << std::setprecision(2) << dp.time_ms
+                      << " ms\n";
         else if (in.n <= dp_max_n)
             std::cout << "DP baseline: khong kha thi\n";
         else

@@ -1,3 +1,19 @@
+// Quy hoạch động Chia để trị (Divide & Conquer Optimization), thời gian O(M * N * log N), bộ nhớ O(M * N).
+//
+// Công thức chuyển trạng thái ở mỗi tầng j = 1..M:
+//   DP(i, j) = min_{k thuộc P, lo[i] <= k < i} { DP(k, j-1) + Cost(k+1, i) }
+//
+// Tính chất đơn điệu của điểm cắt tối ưu (chứng minh ở mục 5 tài liệu mô hình):
+//   Hàm chi phí thực thi g(W) lồi chặt (cả bậc ba W^3 lẫn bậc hai a*W^2 + b*W với a >= 0) nên thỏa
+//   bất đẳng thức tứ giác (Quadrangle Inequality - QI) trên miền hữu hạn:
+//     Cost(k+1, i) + Cost(k'+1, i') <= Cost(k+1, i') + Cost(k'+1, i)   với mọi k < k' < i < i'.
+//   Do đó opt(j, i) <= opt(j, i+1).
+//
+// Xử lý hai ràng buộc cứng để không phá tính đơn điệu vì các ô +inf:
+//   * link_cap: lọc trước mảng ứng viên P chỉ giữ các k có DP(k, j-1) hữu hạn và d_k <= link_cap (k >= 1).
+//   * cap: mỗi hàng i chỉ xét ứng viên P[t] thuộc cửa sổ [pl[r], pr[r]] tương ứng với k thuộc [lo[i], i-1].
+//   Khi một hàng i không có ứng viên hợp lệ (arg < 0), giữ nguyên khoảng [optL, optR] cho hai nửa đệ quy.
+//   Khi hòa: chọn k nhỏ nhất (phép so < chặt) để bảo toàn tính đơn điệu của opt.
 #include <algorithm>
 #include <limits>
 #include <utility>
@@ -6,37 +22,38 @@
 #include "edgedp/cost.hpp"
 #include "edgedp/solver.hpp"
 
-using namespace std;
-
 namespace edgedp {
 
 namespace {
 
 struct Layer {
     const CostModel& cm;
-    const vector<ld>& prev;
-    vector<ld>& cur;
+    const std::vector<ld>& prev;
+    std::vector<ld>& cur;
     int* cur_opt;
-    const vector<int>& P;      // ứng viên k, tăng dần
-    const vector<int>& rows;   // các hàng i khả thi, tăng dần
-    const vector<int>& pl;     // pl[r], pr[r]: cửa sổ chỉ số P của hàng rows[r]
-    const vector<int>& pr;
+    const std::vector<int>& P;     // ứng viên k hợp lệ, tăng dần
+    const std::vector<int>& rows;  // các hàng i có cửa sổ ứng viên khác rỗng, tăng dần
+    const std::vector<int>& pl;    // pl[r], pr[r]: cửa sổ chỉ số trên P của hàng rows[r]
+    const std::vector<int>& pr;
 
     void compute(int rlo, int rhi, int optL, int optR) const {
         if (rlo > rhi) return;
         const int r = (rlo + rhi) / 2;
         const int i = rows[r];
-        const int a = max(optL, pl[r]);
-        const int b = min(optR, pr[r]);
+        const int a = std::max(optL, pl[r]);
+        const int b = std::min(optR, pr[r]);
 
         ld best = inf();
         int arg = -1;
         for (int t = a; t <= b; ++t) {
             const int k = P[t];
             const ld c = cm.cost(k, i);
-            if (c == inf()) continue;  
+            if (c == inf()) continue;
             const ld v = prev[k] + c;
-            if (v < best) { best = v; arg = t; }  
+            if (v < best) {
+                best = v;
+                arg = t;
+            }
         }
         if (arg < 0) {
             cur[i] = inf();
@@ -52,63 +69,71 @@ struct Layer {
     }
 };
 
-} 
+}  // namespace
 
 Solution solve_dc(const Instance& in) {
     const int n = in.n;
     const int m = in.m;
     Solution sol;
-    if (n == 0) { sol.feasible = true; return sol; }
+    if (n == 0) {
+        sol.feasible = true;
+        return sol;
+    }
     if (m == 0) return sol;
 
     const CostModel cm(in);
     const ld INF = inf();
     const ld cap = in.params.cap;
 
-
     for (int t = 1; t <= n; ++t) {
         if (static_cast<ld>(cm.work(t - 1, t)) > cap) return sol;
     }
 
-    vector<int> lo(n + 1, 0);
-    {
-        int p = 0;
-        for (int i = 1; i <= n; ++i) {
-            while (static_cast<ld>(cm.work(p, i)) > cap) ++p;
-            lo[i] = p;
-        }
+    std::vector<int> lo(n + 1, 0);
+    for (int i = 1, p = 0; i <= n; ++i) {
+        while (static_cast<ld>(cm.work(p, i)) > cap)
+            ++p;
+        lo[i] = p;
     }
-    // valid_start[k]: đoạn có thể bắt đầu sau điểm cắt k (k = 0 không chịu link_cap).
-    vector<char> valid_start(n + 1, 1);
+
+    // valid_start[k]: đoạn mới có thể bắt đầu ngay sau điểm cắt k (k = 0 không chịu link_cap).
+    std::vector<char> valid_start(n + 1, 1);
     for (int k = 1; k <= n; ++k) {
         valid_start[k] = static_cast<ld>(in.d[k]) <= in.params.link_cap;
     }
 
-    vector<ld> prev(n + 1, INF), cur(n + 1, INF);
+    std::vector<ld> prev(n + 1, INF), cur(n + 1, INF);
     prev[0] = 0;
     // Bảng opt phẳng một khối liên tục (thay vector<vector<int>>): ít cấp phát, truy cập liền kề.
-    vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
+    std::vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
     const auto OPT = [&](int j, int i) -> int* { return opt.data() + static_cast<size_t>(j) * (n + 1) + i; };
-    vector<ld> energy_per_j(m + 1, INF);
+    std::vector<ld> best_at_n(m + 1, INF);
 
-    vector<int> P, rows, pl, pr;
-    P.reserve(n + 1); rows.reserve(n); pl.reserve(n); pr.reserve(n);
+    std::vector<int> P, rows, pl, pr;
+    P.reserve(n + 1);
+    rows.reserve(n);
+    pl.reserve(n);
+    pr.reserve(n);
 
     for (int j = 1; j <= m; ++j) {
-        fill(cur.begin(), cur.end(), INF);
+        std::fill(cur.begin(), cur.end(), INF);
 
         P.clear();
         for (int k = 0; k <= n - 1; ++k) {
             if (prev[k] != INF && valid_start[k]) P.push_back(k);
         }
 
-        // Cửa sổ chỉ số P của từng hàng; hai con trỏ vì lo(i) và i-1 đều không giảm.
-        rows.clear(); pl.clear(); pr.clear();
+        // Cửa sổ chỉ số P của từng hàng; hai con trỏ vì lo[i] và i-1 đều không giảm.
+        rows.clear();
+        pl.clear();
+        pr.clear();
         const int sz = static_cast<int>(P.size());
         int pp = 0, qq = 0;
         for (int i = 1; i <= n; ++i) {
-            while (pp < sz && P[pp] < lo[i]) ++pp;
-            while (qq < sz && P[qq] <= i - 1) ++qq;
+            while (pp < sz && P[pp] < lo[i])
+                ++pp;
+            while (qq < sz && P[qq] <= i - 1)
+                ++qq;
             const int l = pp, r = qq - 1;
             if (l <= r) {
                 rows.push_back(i);
@@ -122,14 +147,17 @@ Solution solve_dc(const Instance& in) {
             layer.compute(0, static_cast<int>(rows.size()) - 1, 0, sz - 1);
         }
 
-        energy_per_j[j] = cur[n];
+        best_at_n[j] = cur[n];
         prev.swap(cur);
     }
 
     int jbest = -1;
     ld ebest = INF;
     for (int j = 1; j <= m; ++j) {
-        if (energy_per_j[j] < ebest) { ebest = energy_per_j[j]; jbest = j; }
+        if (best_at_n[j] < ebest) {
+            ebest = best_at_n[j];
+            jbest = j;
+        }
     }
     if (jbest < 0) return sol;
 
@@ -137,7 +165,8 @@ Solution solve_dc(const Instance& in) {
     sol.energy = ebest;
     sol.nodes_used = jbest;
 
-    vector<int> ends;
+    // Truy vết từ (N, jbest): opt[j][i] = k là điểm cắt trước đoạn cuối.
+    std::vector<int> ends;
     int i = n;
     for (int j = jbest; j >= 1; --j) {
         const int k = *OPT(j, i);
@@ -145,7 +174,7 @@ Solution solve_dc(const Instance& in) {
         i = k;
     }
     ends.push_back(0);
-    reverse(ends.begin(), ends.end());
+    std::reverse(ends.begin(), ends.end());
     for (int s = 1; s <= jbest; ++s) {
         const int k = ends[s - 1], e = ends[s];
         sol.segments.push_back({k + 1, e, cm.work(k, e), cm.cost(k, e)});
@@ -154,4 +183,4 @@ Solution solve_dc(const Instance& in) {
     return sol;
 }
 
-}
+}  // namespace edgedp

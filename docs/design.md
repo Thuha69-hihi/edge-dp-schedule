@@ -175,7 +175,7 @@ Energy Saved % so với DP baseline (chỉ khi `n ≤ dp-max-n` vì baseline là
 | baseline | O(M·N²) | giá trị DP: 2 hàng, O(N); bảng `opt`: O(M·N) |
 | D&C | O(M·N log N) | như trên |
 | CHT (deque, bậc hai, không cửa sổ) | O(M·N) | như trên |
-| CHT có cửa sổ `cap` | dùng Li Chao tree: O(M·N log² N) | như trên |
+| CHT có cửa sổ `cap` (`HullTree`) | O(M·N log N) | cây phân đoạn bao lồi: O(N log N); bảng `opt`: O(M·N) |
 
 Bảng `opt` là `(m+1)·(n+1)` số nguyên 32 bit; với N = 10⁵, M = 32 khoảng 13 MB.
 
@@ -185,16 +185,9 @@ Bảng `opt` là `(m+1)·(n+1)` số nguyên 32 bit; với N = 10⁵, M = 32 kho
 |---|---|---|
 | Ví dụ trong tài liệu | N=5, M=3 phải ra 973, cắt sau τ2; E_on = 200 thì dùng 3 node (864) | `tests/data/example_n5.json`, `test_main.cpp` |
 | Biên | n=0, m=0, tác vụ quá nặng, khối lượng 0, 1 tác vụ | `test_main.cpp` |
-| Oracle độc lập | Vét cạn mọi tập điểm cắt (N ≤ 11) so với baseline trên 600 input ngẫu nhiên, có cả vô nghiệm | `test_main.cpp` |
+| Oracle độc lập | Vét cạn mọi tập điểm cắt (N ≤ 11) so với baseline trên 1000 input ngẫu nhiên, có cả vô nghiệm | `test_main.cpp` |
 | Đối chiếu chéo | `cross_check_*`: solver khác phải cùng `energy` và nghiệm hợp lệ trên 400 input ngẫu nhiên | `test_main.cpp` |
+| Kiểm thử đối chiếu mở rộng | Đối chiếu chéo các solver trên lưới biên, ví dụ chuẩn, ngẫu nhiên và regression canary | `tests/unittest2/` |
 | I/O | Đọc/ghi JSON, từ chối input sai, `energy: null` khi vô nghiệm | `test_main.cpp` |
 
-Kết quả có ba loại: PASS, FAIL, SKIP (chưa cài). CI (`.github/workflows/ci.yml`) chạy `make` và `make test` trên mỗi PR.
-
-## 12. Việc còn mở (cần chốt, ghi rõ để không ai hiểu nhầm)
-
-- [ ] **Tham số `model` (cubic/quadratic) trong `cost.hpp`:** biên bản họp 11/10 giao TV3, **chưa có trong code**.
-  Hiện `cost()` chỉ có bậc ba. Dự kiến thêm `Params::model` và các hệ số `a`, `b` cho `a·W² + b·W`,
-  mặc định `cubic` để mọi thứ cũ không đổi.
-- [ ] **Cách CHT xử lý cửa sổ `cap`:** deque chuẩn sai khi có cửa sổ trượt; chọn Li Chao tree hoặc chỉ dùng CHT khi bỏ `cap`.
-- [ ] **Quy tắc D&C với +∞:** khi mọi k trong khoảng cho +∞ thì `opt` tùy ý, có thể phá đơn điệu (TV4 và TV2 xác nhận).
+Kết quả có ba loại: PASS, FAIL, SKIP (chưa cài). CI (`.github/workflows/ci.yml`) chạy `make`, `make test` và `pytest tests/unittest2` trên mỗi PR.

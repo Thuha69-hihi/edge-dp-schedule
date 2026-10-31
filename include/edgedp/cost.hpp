@@ -13,14 +13,17 @@
 
 namespace edgedp {
 
-inline ld inf() { return std::numeric_limits<ld>::infinity(); }
+inline ld inf() {
+    return std::numeric_limits<ld>::infinity();
+}
 
 struct CostModel {
     const Instance& in;
     std::vector<ll> S;  // size n+1
 
     explicit CostModel(const Instance& instance) : in(instance), S(instance.n + 1, 0) {
-        for (int i = 1; i <= in.n; ++i) S[i] = S[i - 1] + in.w[i - 1];
+        for (int i = 1; i <= in.n; ++i)
+            S[i] = S[i - 1] + in.w[i - 1];
     }
 
     // Khối lượng đoạn (k, i], tức τ_{k+1}..τ_i.

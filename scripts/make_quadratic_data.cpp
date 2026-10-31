@@ -55,8 +55,10 @@ int main() {
         long double w_sum = 0, d_sum = 0;
         const Json* w_arr = root.get("w");
         const Json* d_arr = root.get("d");
-        for (const auto& x : w_arr->arr) w_sum += x.num;
-        for (const auto& x : d_arr->arr) d_sum += x.num;
+        for (const auto& x : w_arr->arr)
+            w_sum += x.num;
+        for (const auto& x : d_arr->arr)
+            d_sum += x.num;
 
         long double w_bar = w_sum / m;
         long double d_bar = d_sum / n;
@@ -106,9 +108,7 @@ int main() {
         out_f << "}}\n";
 
         ++count;
-        if (count % 50 == 0) {
-            std::cout << "[" << count << "/300] " << filename << "\n";
-        }
+        if (count % 50 == 0) { std::cout << "[" << count << "/300] " << filename << "\n"; }
     }
     std::cout << "Hoàn thành tạo " << count << " file quadratic!\n";
     return 0;
