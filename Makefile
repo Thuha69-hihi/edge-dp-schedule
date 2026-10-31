@@ -38,7 +38,18 @@ reproduce:
 reproduce-quick:
 	bash scripts/reproduce.sh --quick
 
+# Đo độ phủ (việc 7.02): build lại với --coverage, chạy make test + pytest, in báo cáo gcovr.
+# Cần gcovr (pip install gcovr). Xong thì "make clean && make" để quay lại bản -O2.
+COV_FILTER := --filter src/ --filter include/ --exclude src/main_heuristics.cpp
+coverage:
+	rm -rf $(BUILD)
+	$(MAKE) all CXXFLAGS="-std=c++17 -O0 -g --coverage -Wall -Wextra -Iinclude"
+	./$(BUILD)/run_tests
+	python3 -m pytest tests/unittest2 -q
+	gcovr -r . $(COV_FILTER)
+	gcovr -r . $(COV_FILTER) --txt-metric branch --exclude-throw-branches --exclude-unreachable-branches
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test clean brute reproduce reproduce-quick
+.PHONY: all test clean brute reproduce reproduce-quick coverage
