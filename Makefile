@@ -31,7 +31,14 @@ brute: $(BUILD)/brute_force_exec
 test: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
 
+# Tái tạo toàn bộ thí nghiệm (xem README, mục 'Tái tạo thí nghiệm')
+reproduce:
+	bash scripts/reproduce.sh
+
+reproduce-quick:
+	bash scripts/reproduce.sh --quick
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test clean
+.PHONY: all test clean brute reproduce reproduce-quick
