@@ -41,6 +41,15 @@ LABELS = {
     "heuristic": "Heuristic",
 }
 
+# 4 heuristic so sánh Energy Saved % (src/heuristics.cpp); màu khác các solver DP ở trên.
+HEURISTICS = {
+    "greedy":     {"color": "#E69F00", "hatch": ""},
+    "equal":      {"color": "#56B4E9", "hatch": "//"},
+    "single":     {"color": "#999999", "hatch": "xx"},
+    "roundrobin": {"color": "#CC79A7", "hatch": ".."},
+}
+HEURISTIC_LABELS = {"greedy": "Greedy", "equal": "Chia đều", "single": "Một node", "roundrobin": "Round-robin"}
+
 FIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
 
 RC = {
