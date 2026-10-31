@@ -20,9 +20,19 @@ Solution solve_baseline(const Instance& in) {
     const CostModel cm(in);
     const ld INF = inf();
 
+    // lo[i] = k nhỏ nhất có S_i - S_k <= cap (không giảm theo i). Mọi k < lo[i] có Cost = +inf nên bỏ qua hẳn
+    // thay vì gọi cost() rồi loại: vòng trong chỉ chạy trên cửa sổ [lo[i], i-1]. Kết quả không đổi.
+    std::vector<int> lo(n + 1, 0);
+    for (int i = 1, p = 0; i <= n; ++i) {
+        while (p < i && static_cast<ld>(cm.work(p, i)) > in.params.cap) ++p;
+        lo[i] = p;
+    }
+
     std::vector<ld> prev(n + 1, INF), cur(n + 1, INF);
     prev[0] = 0;                                       // hàng j = 0
-    std::vector<std::vector<int>> opt(m + 1, std::vector<int>(n + 1, -1));
+    // Bảng opt phẳng (một khối liên tục) thay cho vector<vector<int>>: bớt m+1 lần cấp phát, truy cập liền kề.
+    std::vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
+    const auto OPT = [&](int j, int i) -> int& { return opt[static_cast<size_t>(j) * (n + 1) + i]; };
     std::vector<ld> best_at_n(m + 1, INF);             // DP(N, j)
 
     for (int j = 1; j <= m; ++j) {
@@ -30,7 +40,7 @@ Solution solve_baseline(const Instance& in) {
         for (int i = j; i <= n; ++i) {
             ld best = INF;
             int arg = -1;
-            for (int k = j - 1; k < i; ++k) {
+            for (int k = std::max(j - 1, lo[i]); k < i; ++k) {
                 if (prev[k] == INF) continue;
                 const ld c = cm.cost(k, i);
                 if (c == INF) continue;
@@ -38,7 +48,7 @@ Solution solve_baseline(const Instance& in) {
                 if (v < best) { best = v; arg = k; }
             }
             cur[i] = best;
-            opt[j][i] = arg;
+            OPT(j, i) = arg;
         }
         best_at_n[j] = cur[n];
         prev.swap(cur);
@@ -58,7 +68,7 @@ Solution solve_baseline(const Instance& in) {
     std::vector<int> ends;  // c_j, c_{j-1}, ..., c_0 = 0 (ngược)
     int i = n;
     for (int j = jbest; j >= 1; --j) {
-        const int k = opt[j][i];
+        const int k = OPT(j, i);
         ends.push_back(i);
         i = k;
     }

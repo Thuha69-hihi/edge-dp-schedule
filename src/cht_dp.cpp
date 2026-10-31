@@ -63,7 +63,7 @@ inline void hull_push(const Lines& L, int* st, int& cnt, int head, int nw) {
 
 // ---- Cách 1: deque, dùng khi cap không bao giờ cắt cửa sổ ----
 void layer_deque(const Lines& L, const CostModel& cm, int n, const std::vector<ld>& prev,
-                 std::vector<ld>& cur, std::vector<int>& opt) {
+                 std::vector<ld>& cur, int* opt) {
     std::vector<int> st(n + 1);
     int head = 0, cnt = 0;
     for (int i = 1; i <= n; ++i) {
@@ -146,7 +146,7 @@ struct HullTree {
 };
 
 void layer_tree(HullTree& tree, const Lines& L, const CostModel& cm, int n, ld cap, const std::vector<ld>& prev,
-                std::vector<ld>& cur, std::vector<int>& opt) {
+                std::vector<ld>& cur, int* opt) {
     tree.build(L);
     int lo = 0;
     for (int i = 1; i <= n; ++i) {
@@ -188,7 +188,9 @@ Solution solve_cht(const Instance& in) {
 
     std::vector<ld> prev(n + 1, INF), cur(n + 1, INF);
     prev[0] = 0;
-    std::vector<std::vector<int>> opt(m + 1, std::vector<int>(n + 1, -1));
+    // Bảng opt phẳng một khối liên tục (thay vector<vector<int>>).
+    std::vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
+    const auto OPT = [&](int j, int i) -> int* { return opt.data() + static_cast<size_t>(j) * (n + 1) + i; };
     std::vector<ld> best_at_n(m + 1, INF);
 
     for (int j = 1; j <= m; ++j) {
@@ -205,8 +207,8 @@ Solution solve_cht(const Instance& in) {
         if (!any) break;  // không còn trạng thái hữu hạn: các tầng sau cũng vô nghiệm
 
         std::fill(cur.begin(), cur.end(), INF);
-        if (windowed) layer_tree(tree, L, cm, n, P.cap, prev, cur, opt[j]);
-        else layer_deque(L, cm, n, prev, cur, opt[j]);
+        if (windowed) layer_tree(tree, L, cm, n, P.cap, prev, cur, OPT(j, 0));
+        else layer_deque(L, cm, n, prev, cur, OPT(j, 0));
         best_at_n[j] = cur[n];
         prev.swap(cur);
     }
@@ -225,7 +227,7 @@ Solution solve_cht(const Instance& in) {
     std::vector<int> ends;
     int i = n;
     for (int j = jbest; j >= 1; --j) {
-        const int k = opt[j][i];
+        const int k = *OPT(j, i);
         ends.push_back(i);
         i = k;
     }
