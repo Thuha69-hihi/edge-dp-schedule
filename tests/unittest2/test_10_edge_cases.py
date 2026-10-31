@@ -35,6 +35,7 @@ def test_n1_m1_co_nghiem():
     assert (n_ok, n_inf) == (1, 0)
     for algo in EXACT_CUBIC:
         sol = run_solver(algo, inst)
+        assert energies_close(sol["energy"], 256.5), algo
         assert sol["nodes_used"] == 1
         assert sol["cuts"] == []
         assert sol["segments"][0]["work"] == 5
@@ -229,7 +230,7 @@ def test_vo_nghiem_bat_ke_so_node():
 def test_quadratic_cac_bien_ben():
     """Cùng bộ edge case nhưng model='quadratic' -> bộ so sánh gồm cả CHT."""
     cases = [
-        # N=1, M=1 khả thi: 3 + 2*25 + 1*5 + 0.5*7 = 63.5
+        # N=1, M=1 khả thi: 3 + 2*25 + 1*5 + 0.5*7 = 61.5
         make_instance(n=1, m=1, w=[5], d=[7], kappa=2.0, e_on=3.0, eps=0.5,
                       cap=10.0, link_cap=1.0, model="quadratic", quad_a=2.0, quad_b=1.0),
         # N=1, M=1 vô nghiệm (cap < w)
@@ -241,12 +242,18 @@ def test_quadratic_cac_bien_ben():
         # deadline chặt, không có nghiệm
         make_instance(n=4, m=2, w=[2, 3, 6, 1], d=[1, 1, 1, 1], kappa=1.0, e_on=250.0,
                       eps=1.0, cap=6.5, link_cap=1e9, model="quadratic", quad_a=0.5, quad_b=2.0),
-        # M=1 khả thi: 250 + 0.5*144 + 2*12 + 1*3 = 349
+        # M=1 khả thi: S_N = 10 -> 250 + 0.5*100 + 2*10 + 1*3 = 323
         make_instance(n=4, m=1, w=[2, 3, 1, 4], d=[3, 4, 2, 6], kappa=1.0, e_on=250.0,
                       eps=1.0, cap=12.0, link_cap=5.0, model="quadratic", quad_a=0.5, quad_b=2.0),
     ]
     n_ok, n_inf = cross_check(EXACT_QUADRATIC, cases, tag="quad_edge")
     assert n_ok == 3 and n_inf == 2
+    # Giá trị đóng: bắt cả lỗi chung của CostModel mà cross-check giữa các solver không thấy.
+    expected = {0: 61.5, 4: 323.0}
+    for idx, e in expected.items():
+        for algo in EXACT_QUADRATIC:
+            got = run_solver(algo, cases[idx])["energy"]
+            assert energies_close(got, e), f"case {idx} {algo}: {got} != {e}"
 
 
 # ---------------- Cấu trúc đầu ra ----------------

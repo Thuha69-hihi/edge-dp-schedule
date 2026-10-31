@@ -34,9 +34,7 @@ EXACT_QUADRATIC = ["baseline", "dc", "cht", "bruteforce"]
 
 
 def ensure_built():
-    """Biên dịch CLI nếu chưa có binary (gọi make, dùng Makefile của project)."""
-    if os.path.exists(EDGEDP):
-        return
+    """Luôn gọi make (biên dịch tăng dần, nhanh khi không đổi gì) để không test nhầm binary cũ."""
     subprocess.run(["make", "build/edgedp"], cwd=ROOT, check=True)
 
 
@@ -59,14 +57,21 @@ def run_solver(algo, instance):
 
 
 def make_instance(n, m, w, d, kappa=1.0, e_on=250.0, eps=1.0, cap=8.0,
-                  link_cap=5.0, model=None, **extra):
-    """Dựng instance JSON đúng định dạng input của CLI (xem README)."""
+                  link_cap=5.0, model=None, quad_a=None, quad_b=None, **extra):
+    """Dựng instance JSON đúng định dạng input của CLI (xem README).
+
+    quad_a, quad_b phải nằm trong "params": io.cpp chỉ đọc chúng ở đó, để ở gốc
+    thì bị bỏ qua im lặng (quad_a lấy kappa_over_T2, quad_b = 0)."""
     params = {
         "kappa_over_T2": kappa, "e_on": e_on, "eps": eps,
         "cap": cap, "link_cap": link_cap,
     }
     if model is not None:
         params["model"] = model
+    if quad_a is not None:
+        params["quad_a"] = quad_a
+    if quad_b is not None:
+        params["quad_b"] = quad_b
     inst = {"n": n, "m": m, "w": list(w), "d": list(d), "params": params}
     inst.update(extra)
     return inst
