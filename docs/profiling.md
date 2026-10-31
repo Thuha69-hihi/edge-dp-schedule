@@ -1,4 +1,4 @@
-# Profiling và tối ưu code (5.03)
+# Profiling và tối ưu code 
 
 Máy đo: 2 nhân, g++ -std=c++17 -O2 (cờ mặc định của Makefile). Mỗi số là trung vị của 3 lần chạy, thời gian lấy từ `time_ms`
 do chương trình tự báo; bộ nhớ là peak RSS. Dữ liệu: `data/synthetic/*_a1.2_b10_s1.json`; CHT dùng bản sao của file
