@@ -1,11 +1,9 @@
-// Brute force độc lập cho N nhỏ (<= ~16), dùng làm chuẩn đối chiếu với baseline.
+// Brute force độc lập cho N nhỏ (N <= 18), dùng làm chuẩn đối chiếu với baseline.
 // Biên dịch:
-//   g++ -std=c++17 -O2 -Iinclude -Isrc tests/brute_force_exec.cpp \
-//       src/baseline_dp.cpp src/brute_force.cpp src/cht_dp.cpp src/dc_opt.cpp \
-//       src/io.cpp src/json.cpp src/registry.cpp -o build/brute_force
+//   make build/brute_force_exec
 // Sử dụng:
-//   ./build/brute_force tests/data/example_n5.json
-//   ./build/brute_force path/to/instance.json
+//   ./build/brute_force_exec tests/data/example_n5.json
+//   ./build/brute_force_exec path/to/instance.json
 //
 // Đầu vào: JSON định dạng như CLI edgedp.
 // Đầu ra: JSON cùng định dạng output của edgedp (bao gồm energy + cuts).

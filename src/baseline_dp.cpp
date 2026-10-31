@@ -14,8 +14,11 @@ Solution solve_baseline(const Instance& in) {
     const int n = in.n;
     const int m = in.m;
     Solution sol;
-    if (n == 0) { sol.feasible = true; return sol; }  // không có việc: năng lượng 0, không bật node nào
-    if (m == 0) return sol;                           // có việc mà không có node
+    if (n == 0) {
+        sol.feasible = true;
+        return sol;
+    }                        // không có việc: năng lượng 0, không bật node nào
+    if (m == 0) return sol;  // có việc mà không có node
 
     const CostModel cm(in);
     const ld INF = inf();
@@ -24,16 +27,18 @@ Solution solve_baseline(const Instance& in) {
     // thay vì gọi cost() rồi loại: vòng trong chỉ chạy trên cửa sổ [lo[i], i-1]. Kết quả không đổi.
     std::vector<int> lo(n + 1, 0);
     for (int i = 1, p = 0; i <= n; ++i) {
-        while (p < i && static_cast<ld>(cm.work(p, i)) > in.params.cap) ++p;
+        while (p<i&& static_cast<ld>(cm.work(p, i))> in.params.cap)
+            ++p;
         lo[i] = p;
     }
 
     std::vector<ld> prev(n + 1, INF), cur(n + 1, INF);
-    prev[0] = 0;                                       // hàng j = 0
-    // Bảng opt phẳng (một khối liên tục) thay cho vector<vector<int>>: bớt m+1 lần cấp phát, truy cập liền kề.
+    prev[0] = 0;  // hàng j = 0
+    // Bảng opt phẳng (một khối liên tục) thay cho vector<vector<int>>: bớt m+1 lần cấp phát, truy cập liền
+    // kề.
     std::vector<int> opt(static_cast<size_t>(m + 1) * (n + 1), -1);
     const auto OPT = [&](int j, int i) -> int& { return opt[static_cast<size_t>(j) * (n + 1) + i]; };
-    std::vector<ld> best_at_n(m + 1, INF);             // DP(N, j)
+    std::vector<ld> best_at_n(m + 1, INF);  // DP(N, j)
 
     for (int j = 1; j <= m; ++j) {
         std::fill(cur.begin(), cur.end(), INF);
@@ -45,7 +50,10 @@ Solution solve_baseline(const Instance& in) {
                 const ld c = cm.cost(k, i);
                 if (c == INF) continue;
                 const ld v = prev[k] + c;
-                if (v < best) { best = v; arg = k; }
+                if (v < best) {
+                    best = v;
+                    arg = k;
+                }
             }
             cur[i] = best;
             OPT(j, i) = arg;
@@ -57,7 +65,10 @@ Solution solve_baseline(const Instance& in) {
     int jbest = -1;
     ld ebest = INF;
     for (int j = 1; j <= m; ++j)
-        if (best_at_n[j] < ebest) { ebest = best_at_n[j]; jbest = j; }
+        if (best_at_n[j] < ebest) {
+            ebest = best_at_n[j];
+            jbest = j;
+        }
     if (jbest < 0) return sol;  // không khả thi: feasible = false
 
     sol.feasible = true;

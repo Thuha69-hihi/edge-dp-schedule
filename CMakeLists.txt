@@ -22,10 +22,14 @@ target_link_libraries(edgedp_heur edgedp_lib)
 add_executable(edgedp src/main.cpp)
 target_link_libraries(edgedp edgedp_lib)
 
-if(UNIX)
-  add_executable(run_bench bench/run_bench.cpp src/json.cpp)
-  target_include_directories(run_bench PRIVATE src)
+add_executable(run_bench bench/run_bench.cpp src/json.cpp)
+target_include_directories(run_bench PRIVATE src)
+if(WIN32)
+  target_link_libraries(run_bench psapi)
 endif()
+
+add_executable(brute_force_exec tests/brute_force_exec.cpp)
+target_link_libraries(brute_force_exec edgedp_lib)
 
 enable_testing()
 add_executable(run_tests tests/test_main.cpp)

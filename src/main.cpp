@@ -14,9 +14,14 @@ using namespace edgedp;
 int main(int argc, char** argv) {
     std::string algo = "baseline", path;
     for (int i = 1; i < argc; ++i) {
-        if (!std::strcmp(argv[i], "--algo") && i + 1 < argc) algo = argv[++i];
-        else if (!std::strcmp(argv[i], "--input") && i + 1 < argc) path = argv[++i];
-        else { std::cerr << "Tham so khong hop le: " << argv[i] << "\n"; return 2; }
+        if (!std::strcmp(argv[i], "--algo") && i + 1 < argc)
+            algo = argv[++i];
+        else if (!std::strcmp(argv[i], "--input") && i + 1 < argc)
+            path = argv[++i];
+        else {
+            std::cerr << "Tham so khong hop le: " << argv[i] << "\n";
+            return 2;
+        }
     }
     if (path.empty()) {
         std::cerr << "Dung: edgedp --algo <baseline|cht|dc|bruteforce> --input <file.json>\n";

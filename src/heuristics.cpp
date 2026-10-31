@@ -8,7 +8,6 @@
 #include "edgedp/heuristics.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <stdexcept>
 
 #include "edgedp/cost.hpp"
@@ -18,15 +17,17 @@ namespace {
 
 struct View {
     int n = 0, m = 0;
-    std::vector<int64_t> S;  // S[0..n]
-    std::vector<ld> d;       // d[0..n-1]
+    std::vector<ll> S;  // S[0..n]
+    std::vector<ld> d;  // d[0..n-1]
     ld kappa = 0, e_on = 0, eps = 0, cap = 0, link_cap = 0;
 
     explicit View(const Instance& in) : n(in.n), m(in.m) {
         S.assign(n + 1, 0);
         d.assign(n, 0);
-        for (int i = 1; i <= n; ++i) S[i] = S[i - 1] + in.w[i - 1];
-        for (int i = 0; i < n; ++i) d[i] = static_cast<ld>(in.d[i]);
+        for (int i = 1; i <= n; ++i)
+            S[i] = S[i - 1] + in.w[i - 1];
+        for (int i = 0; i < n; ++i)
+            d[i] = static_cast<ld>(in.d[i]);
         const auto& p = in.params;
         kappa = p.kappa_over_T2;
         e_on = p.e_on;
@@ -81,12 +82,14 @@ HeuristicResult solve_greedy(const Instance& in) {
             break;
         }
         // i lớn nhất sao cho S[i] - S[k] <= cap
-        int imax = static_cast<int>(std::upper_bound(v.S.begin() + k + 1, v.S.end(),
-                                                      v.S[k] + static_cast<int64_t>(v.cap)) -
-                                    v.S.begin()) - 1;
+        int imax = static_cast<int>(
+                       std::upper_bound(v.S.begin() + k + 1, v.S.end(), v.S[k] + static_cast<ll>(v.cap)) -
+                       v.S.begin()) -
+                   1;
         if (imax <= k) imax = k + 1;  // một tác vụ đơn lẻ đã vượt cap: buộc phải nhận (vi phạm)
         int i = imax;
-        while (i > k && i < v.n && !v.cut_allowed(i)) --i;
+        while (i > k && i < v.n && !v.cut_allowed(i))
+            --i;
         if (i == k) i = imax;  // không có điểm cắt hợp lệ trong tầm với: chấp nhận vi phạm link
         ends.push_back(i);
         k = i;
@@ -101,7 +104,7 @@ HeuristicResult solve_equal_split(const Instance& in) {
     const int j = std::min(v.m, v.n);
     std::vector<int> ends;
     for (int s = 1; s <= j; ++s)
-        ends.push_back(static_cast<int>(static_cast<long long>(s) * v.n / j));
+        ends.push_back(static_cast<int>(static_cast<ll>(s) * v.n / j));
     return evaluate_contiguous(v, "equal", ends);
 }
 
@@ -118,12 +121,14 @@ HeuristicResult solve_single_node(const Instance& in) {
 HeuristicResult solve_round_robin(const Instance& in) {
     const View v(in);
     if (v.n == 0 || v.m <= 0) return trivial(v, "roundrobin");
-    std::vector<int64_t> load(v.m, 0);
-    for (int i = 1; i <= v.n; ++i) load[(i - 1) % v.m] += v.S[i] - v.S[i - 1];
+    std::vector<ll> load(v.m, 0);
+    for (int i = 1; i <= v.n; ++i)
+        load[(i - 1) % v.m] += v.S[i] - v.S[i - 1];
     HeuristicResult r;
     r.name = "roundrobin";
     for (int s = 0; s < v.m; ++s) {
-        if (load[s] == 0) continue;  // node không có tác vụ thì không bật (w_i >= 1 nên load > 0 khi có tác vụ)
+        if (load[s] == 0)
+            continue;  // node không có tác vụ thì không bật (w_i >= 1 nên load > 0 khi có tác vụ)
         ++r.nodes_used;
         r.energy += v.e_on + v.exec(static_cast<ld>(load[s]));
         if (static_cast<ld>(load[s]) > v.cap) ++r.violated_cap;

@@ -17,8 +17,9 @@
 //
 // Build (từ thư mục gốc dự án, json.cpp/json.hpp nằm cạnh io.cpp):
 //   Linux/macOS:  g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench
-//   Windows (MinGW):  g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench.exe -lpsapi
-//   Windows (MSVC):   cl /std:c++17 /O2 /EHsc /Isrc bench\run_bench.cpp src\json.cpp /Fe:build\run_bench.exe
+//   Windows (MinGW):  g++ -std=c++17 -O2 -Isrc bench/run_bench.cpp src/json.cpp -o build/run_bench.exe
+//   -lpsapi Windows (MSVC):   cl /std:c++17 /O2 /EHsc /Isrc bench\run_bench.cpp src\json.cpp
+//   /Fe:build\run_bench.exe
 // Ví dụ:
 //   build/run_bench --bin build/edgedp data/synthetic --repeats 3 --max-n baseline=10000
 //       --timeout 600 --out results/time_mem.csv --summary results/time_mem_summary.csv
@@ -68,7 +69,6 @@
 #include <unistd.h>
 #endif
 
-
 #include "json.hpp"
 
 namespace fs = std::filesystem;
@@ -117,7 +117,8 @@ static std::vector<std::string> split(const std::string& s, char sep) {
     std::vector<std::string> out;
     std::string cur;
     std::stringstream ss(s);
-    while (std::getline(ss, cur, sep)) out.push_back(cur);
+    while (std::getline(ss, cur, sep))
+        out.push_back(cur);
     if (!s.empty() && s.back() == sep) out.push_back("");
     return out;
 }
@@ -191,8 +192,8 @@ static HANDLE open_inheritable(const std::wstring& path, bool write) {
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof sa;
     sa.bInheritHandle = TRUE;
-    return CreateFileW(path.c_str(), write ? GENERIC_WRITE : GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
-                       write ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    return CreateFileW(path.c_str(), write ? GENERIC_WRITE : GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                       &sa, write ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 }
 
 static RunResult run_once(std::vector<std::string> cmd, double timeout) {
@@ -205,7 +206,9 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
     HANDLE hout = open_inheritable(fs::path(out_path).wstring(), true);
     HANDLE herr = open_inheritable(fs::path(err_path).wstring(), true);
     if (hin == INVALID_HANDLE_VALUE || hout == INVALID_HANDLE_VALUE || herr == INVALID_HANDLE_VALUE) {
-        close_h(hin); close_h(hout); close_h(herr);
+        close_h(hin);
+        close_h(hout);
+        close_h(herr);
         r.status = "error";
         return r;
     }
@@ -218,7 +221,8 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
         cmdline += quote_arg(p.wstring());
     }
 
-    // Job Object: giết cả cây tiến trình khi timeout (thay setsid + kill(-pid)), và tự dọn nếu harness bị ngắt.
+    // Job Object: giết cả cây tiến trình khi timeout (thay setsid + kill(-pid)), và tự dọn nếu harness bị
+    // ngắt.
     HANDLE job = CreateJobObjectW(nullptr, nullptr);
     if (job) {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION li{};
@@ -235,10 +239,14 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
     PROCESS_INFORMATION pi{};
 
     auto t0 = std::chrono::steady_clock::now();
-    auto elapsed = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
-    BOOL ok = CreateProcessW(nullptr, &cmdline[0], nullptr, nullptr, TRUE, CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                             nullptr, nullptr, &si, &pi);
-    close_h(hin); close_h(hout); close_h(herr);  // tiến trình con đã giữ bản sao handle
+    auto elapsed = [&] {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
+    BOOL ok = CreateProcessW(nullptr, &cmdline[0], nullptr, nullptr, TRUE,
+                             CREATE_SUSPENDED | CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    close_h(hin);
+    close_h(hout);
+    close_h(herr);  // tiến trình con đã giữ bản sao handle
     if (!ok) {
         DWORD e = GetLastError();
         r.wall_ms = elapsed() * 1000.0;
@@ -255,8 +263,10 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
     DWORD w = WaitForSingleObject(pi.hProcess, timeout > 0 ? static_cast<DWORD>(timeout * 1000.0) : INFINITE);
     if (w == WAIT_TIMEOUT) {
         r.status = "timeout";
-        if (in_job) TerminateJobObject(job, 1);
-        else TerminateProcess(pi.hProcess, 1);
+        if (in_job)
+            TerminateJobObject(job, 1);
+        else
+            TerminateProcess(pi.hProcess, 1);
         WaitForSingleObject(pi.hProcess, INFINITE);
     }
     r.wall_ms = elapsed() * 1000.0;
@@ -315,11 +325,14 @@ static RunResult run_once(std::vector<std::string> cmd, double timeout) {
         return r;
     }
     std::vector<char*> argv;
-    for (auto& s : cmd) argv.push_back(const_cast<char*>(s.c_str()));
+    for (auto& s : cmd)
+        argv.push_back(const_cast<char*>(s.c_str()));
     argv.push_back(nullptr);
 
     auto t0 = std::chrono::steady_clock::now();
-    auto elapsed = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    auto elapsed = [&] {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
     pid_t pid = fork();
     if (pid == 0) {
         setsid();
@@ -415,7 +428,8 @@ static std::vector<std::string> expand_glob(const std::string& pattern) {
         const std::string ps = part.string();
         std::vector<fs::path> next;
         if (ps.find_first_of("*?") == std::string::npos) {
-            for (auto& b : cur) next.push_back(b / part);
+            for (auto& b : cur)
+                next.push_back(b / part);
         } else {
             for (auto& b : cur) {
                 std::error_code ec;
@@ -465,7 +479,8 @@ static std::vector<std::string> collect_inputs(const std::vector<std::string>& p
                     files.push_back(base.empty() ? cells[col] : (fs::path(base) / cells[col]).string());
             }
         } else if (p.find_first_of("*?") != std::string::npos) {
-            for (auto& f : expand_glob(p)) files.push_back(f);
+            for (auto& f : expand_glob(p))
+                files.push_back(f);
         } else {
             files.push_back(p);
         }
@@ -508,7 +523,9 @@ struct Args {
     std::map<std::string, long long> max_n;
 };
 
-static std::string alias(const std::string& s) { return s == "dnc" ? "dc" : s; }  // tên cũ -> registry.cpp
+static std::string alias(const std::string& s) {
+    return s == "dnc" ? "dc" : s;
+}  // tên cũ -> registry.cpp
 
 static void annotate(std::vector<Row>& rows, const std::set<std::string>& exact) {
     std::vector<Row*> ok_exact;
@@ -525,9 +542,10 @@ static void annotate(std::vector<Row>& rows, const std::set<std::string>& exact)
     if (!have_ref && !ok_exact.empty()) have_ref = true;  // tất cả cùng vô nghiệm
     if (have_ref) {
         for (Row* r : ok_exact) {
-            bool same = ref_feasible ? (r->feasible && *r->feasible && r->energy &&
-                                        std::fabs(*r->energy - ref_e) <= REL_TOL * std::max(1.0, std::fabs(ref_e)))
-                                     : (r->feasible && !*r->feasible);
+            bool same = ref_feasible
+                            ? (r->feasible && *r->feasible && r->energy &&
+                               std::fabs(*r->energy - ref_e) <= REL_TOL * std::max(1.0, std::fabs(ref_e)))
+                            : (r->feasible && !*r->feasible);
             r->match_ref = same ? "ok" : "MISMATCH";
             if (!same)
                 std::cerr << "CẢNH BÁO: " << r->file << ": " << r->solver
@@ -544,7 +562,8 @@ static void annotate(std::vector<Row>& rows, const std::set<std::string>& exact)
 using BaselineKey = std::tuple<int, double, double, int>;
 static std::map<BaselineKey, double> baseline_history;
 
-static std::vector<Row> bench_file(const Args& a, const std::string& path, const std::vector<std::string>& solvers,
+static std::vector<Row> bench_file(const Args& a, const std::string& path,
+                                   const std::vector<std::string>& solvers,
                                    const std::set<std::string>& exact) {
     Row head = read_header(path);
     Opt load_rss;
@@ -602,8 +621,7 @@ static std::vector<Row> bench_file(const Args& a, const std::string& path, const
                 std::optional<Json> res;
                 try {
                     if (!trim(r.out).empty()) res = edgedp::parse_json(r.out);
-                } catch (const std::exception&) {
-                }
+                } catch (const std::exception&) {}
                 if (r.rc != 0 || !res || res->type != Json::Obj) {
                     row.status = "error";
                     row.note = "rc=" + std::to_string(r.rc) + "; " + trim(r.err).substr(0, 200);
@@ -634,14 +652,32 @@ static std::vector<Row> bench_file(const Args& a, const std::string& path, const
 
 // ----------------------------------------------------------------------------- ghi CSV
 static void write_row(std::ostream& os, const Row& r) {
-    std::vector<std::string> c = {
-        r.file, r.source, fnum(r.n, "%.0f"), fnum(r.m, "%.0f"), fnum(r.alpha, "%.15g"), fnum(r.beta, "%.15g"),
-        fnum(r.seed, "%.0f"), r.solver, std::to_string(r.rep), r.status,
-        r.feasible ? (*r.feasible ? "True" : "False") : "", fnum(r.energy, "%.15g"), fnum(r.nodes_used, "%.0f"),
-        fnum(r.time_ms, "%.6g"), fnum(r.wall_ms, "%.3f"), fnum(r.peak_rss, "%.3f"), fnum(r.load_rss, "%.3f"),
-        fnum(r.net_rss, "%.3f"), r.mem_src, fnum(r.vcap, "%.0f"), fnum(r.vlink, "%.0f"), r.match_ref,
-        fnum(r.saved, "%.6f"), r.note};
-    for (size_t i = 0; i < c.size(); ++i) os << (i ? "," : "") << csv_escape(c[i]);
+    std::vector<std::string> c = {r.file,
+                                  r.source,
+                                  fnum(r.n, "%.0f"),
+                                  fnum(r.m, "%.0f"),
+                                  fnum(r.alpha, "%.15g"),
+                                  fnum(r.beta, "%.15g"),
+                                  fnum(r.seed, "%.0f"),
+                                  r.solver,
+                                  std::to_string(r.rep),
+                                  r.status,
+                                  r.feasible ? (*r.feasible ? "True" : "False") : "",
+                                  fnum(r.energy, "%.15g"),
+                                  fnum(r.nodes_used, "%.0f"),
+                                  fnum(r.time_ms, "%.6g"),
+                                  fnum(r.wall_ms, "%.3f"),
+                                  fnum(r.peak_rss, "%.3f"),
+                                  fnum(r.load_rss, "%.3f"),
+                                  fnum(r.net_rss, "%.3f"),
+                                  r.mem_src,
+                                  fnum(r.vcap, "%.0f"),
+                                  fnum(r.vlink, "%.0f"),
+                                  r.match_ref,
+                                  fnum(r.saved, "%.6f"),
+                                  r.note};
+    for (size_t i = 0; i < c.size(); ++i)
+        os << (i ? "," : "") << csv_escape(c[i]);
     os << "\n";
 }
 
@@ -653,11 +689,13 @@ static const char* FIELDS =
 static std::pair<std::string, std::string> mean_std(const std::vector<double>& v) {
     if (v.empty()) return {"", ""};
     double mean = 0;
-    for (double x : v) mean += x;
+    for (double x : v)
+        mean += x;
     mean /= v.size();
     double sd = 0;
     if (v.size() > 1) {
-        for (double x : v) sd += (x - mean) * (x - mean);
+        for (double x : v)
+            sd += (x - mean) * (x - mean);
         sd = std::sqrt(sd / (v.size() - 1));
     }
     char a[64], b[64];
@@ -669,7 +707,8 @@ static std::pair<std::string, std::string> mean_std(const std::vector<double>& v
 static void write_summary(const std::vector<Row>& rows, const std::string& path) {
     // Gộp các lần lặp của mỗi file (trung bình), rồi tính mean/std trên các seed.
     std::map<std::pair<std::string, std::string>, std::vector<const Row*>> per_file;
-    for (auto& r : rows) per_file[{r.solver, r.file}].push_back(&r);
+    for (auto& r : rows)
+        per_file[{r.solver, r.file}].push_back(&r);
     using Key = std::tuple<std::string, std::string, std::string, std::string, std::string>;
     std::map<Key, std::vector<std::vector<const Row*>>> groups;
     for (auto& kv : per_file) {
@@ -678,7 +717,7 @@ static void write_summary(const std::vector<Row>& rows, const std::string& path)
                    fnum(f.beta, "%.15g")}]
             .push_back(kv.second);
     }
-    auto avg = [](const std::vector<const Row*>& rs, Opt Row::*col) -> Opt {
+    auto avg = [](const std::vector<const Row*>& rs, Opt Row::* col) -> Opt {
         double s = 0;
         int k = 0;
         for (auto* r : rs)
@@ -689,14 +728,16 @@ static void write_summary(const std::vector<Row>& rows, const std::string& path)
         return k ? Opt(s / k) : std::nullopt;
     };
     std::ofstream os(path);
-    os << "solver,n,m,alpha,beta,files,ok,timeout,skipped,error,not_impl,time_ms_mean,time_ms_std,wall_ms_mean,"
-          "wall_ms_std,peak_rss_mb_mean,peak_rss_mb_std,net_rss_mb_mean,net_rss_mb_std,energy_mean,energy_std,"
+    os << "solver,n,m,alpha,beta,files,ok,timeout,skipped,error,not_impl,time_ms_mean,time_ms_std,wall_ms_"
+          "mean,"
+          "wall_ms_std,peak_rss_mb_mean,peak_rss_mb_std,net_rss_mb_mean,net_rss_mb_std,energy_mean,energy_"
+          "std,"
           "violation_rate,energy_saved_pct_mean,energy_saved_pct_std,mismatch\n";
     struct Col {
-        Opt Row::*p;
+        Opt Row::* p;
     };
     const Col cols[] = {{&Row::time_ms}, {&Row::wall_ms}, {&Row::peak_rss}, {&Row::net_rss}, {&Row::energy}};
-    auto stats = [&](const std::vector<std::vector<const Row*>>& files, Opt Row::*p) {
+    auto stats = [&](const std::vector<std::vector<const Row*>>& files, Opt Row::* p) {
         std::vector<double> v;
         for (auto& fs_ : files)
             if (Opt a = avg(fs_, p)) v.push_back(*a);
@@ -711,7 +752,8 @@ static void write_summary(const std::vector<Row>& rows, const std::string& path)
                 if (fs_[0]->status == names[i]) ++cnt[i];
         os << std::get<0>(g.first) << "," << std::get<1>(g.first) << "," << std::get<2>(g.first) << ","
            << std::get<3>(g.first) << "," << std::get<4>(g.first) << "," << files.size();
-        for (int i = 0; i < 5; ++i) os << "," << cnt[i];
+        for (int i = 0; i < 5; ++i)
+            os << "," << cnt[i];
         for (auto& c : cols) {
             auto ms = stats(files, c.p);
             os << "," << ms.first << "," << ms.second;
@@ -722,7 +764,8 @@ static void write_summary(const std::vector<Row>& rows, const std::string& path)
                 ++nf;
                 feas += *fs_[0]->feasible ? 1 : 0;
             }
-            for (auto* r : fs_) mism += r->match_ref == "MISMATCH";
+            for (auto* r : fs_)
+                mism += r->match_ref == "MISMATCH";
         }
         char vr[64] = "";
         if (nf) std::snprintf(vr, sizeof vr, "%.6f", 1.0 - double(feas) / nf);
@@ -749,11 +792,16 @@ int main(int argc, char** argv) {
             }
             return argv[++i];
         };
-        if (k == "--bin") a.bin = val();
-        else if (k == "--solvers") a.solvers = val();
-        else if (k == "--exact") a.exact = val();
-        else if (k == "--repeats") a.repeats = std::atoi(val().c_str());
-        else if (k == "--timeout") a.timeout = std::atof(val().c_str());
+        if (k == "--bin")
+            a.bin = val();
+        else if (k == "--solvers")
+            a.solvers = val();
+        else if (k == "--exact")
+            a.exact = val();
+        else if (k == "--repeats")
+            a.repeats = std::atoi(val().c_str());
+        else if (k == "--timeout")
+            a.timeout = std::atof(val().c_str());
         else if (k == "--max-n") {
             std::string v = val();
             size_t eq = v.find('=');
@@ -762,15 +810,20 @@ int main(int argc, char** argv) {
                 return 2;
             }
             a.max_n[alias(v.substr(0, eq))] = static_cast<long long>(std::atof(v.c_str() + eq + 1));
-        } else if (k == "--load-solver") a.load_solver = val();
-        else if (k == "--mem-mode") a.mem_mode = val();
-        else if (k == "--out") a.out = val();
-        else if (k == "--summary") a.summary = val();
+        } else if (k == "--load-solver")
+            a.load_solver = val();
+        else if (k == "--mem-mode")
+            a.mem_mode = val();
+        else if (k == "--out")
+            a.out = val();
+        else if (k == "--summary")
+            a.summary = val();
         else if (!k.empty() && k[0] == '-' && k.size() > 1) {
             std::cerr << "Tham số không hợp lệ: " << k << "\n";
             usage();
             return 2;
-        } else a.inputs.push_back(k);
+        } else
+            a.inputs.push_back(k);
     }
     if (a.bin.empty() || a.inputs.empty()) {
         usage();
@@ -793,8 +846,10 @@ int main(int argc, char** argv) {
     }
     std::vector<std::string> solvers;
     std::set<std::string> exact;
-    for (auto& s : split(a.solvers, ',')) if (!s.empty()) solvers.push_back(alias(s));
-    for (auto& s : split(a.exact, ',')) if (!s.empty()) exact.insert(alias(s));
+    for (auto& s : split(a.solvers, ','))
+        if (!s.empty()) solvers.push_back(alias(s));
+    for (auto& s : split(a.exact, ','))
+        if (!s.empty()) exact.insert(alias(s));
 
     fs::path od = fs::path(a.out).parent_path();
     if (!od.empty()) fs::create_directories(od);
@@ -803,8 +858,8 @@ int main(int argc, char** argv) {
         std::ofstream os(a.out);
         os << FIELDS << "\n";
         for (size_t idx = 0; idx < files.size(); ++idx) {
-            std::cerr << "[" << idx + 1 << "/" << files.size() << "] " << fs::path(files[idx]).filename().string()
-                      << "\n";
+            std::cerr << "[" << idx + 1 << "/" << files.size() << "] "
+                      << fs::path(files[idx]).filename().string() << "\n";
             std::vector<Row> rows;
             try {
                 rows = bench_file(a, files[idx], solvers, exact);
@@ -812,7 +867,8 @@ int main(int argc, char** argv) {
                 std::cerr << "Bỏ qua " << files[idx] << ": " << e.what() << "\n";
                 continue;
             }
-            for (auto& r : rows) write_row(os, r);
+            for (auto& r : rows)
+                write_row(os, r);
             os.flush();  // giữ kết quả dở dang nếu bị ngắt giữa chừng
             all_rows.insert(all_rows.end(), rows.begin(), rows.end());
         }
@@ -825,7 +881,8 @@ int main(int argc, char** argv) {
         std::cerr << "Đã ghi tổng hợp -> " << a.summary << "\n";
     }
     int bad = 0;
-    for (auto& r : all_rows) bad += r.match_ref == "MISMATCH";
+    for (auto& r : all_rows)
+        bad += r.match_ref == "MISMATCH";
     if (bad) {
         std::cerr << "CÓ " << bad << " dòng MISMATCH: các solver chính xác không cho cùng năng lượng.\n";
         return 3;

@@ -4,8 +4,13 @@ build/
 .vscode/
 .idea/
 .DS_Store
+.venv/
 data/generated/
 results/*
 !results/*.csv
 __pycache__/
 .pytest_cache/
+~$*
+*.tmp
+*.log
+*.docx

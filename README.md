@@ -62,7 +62,7 @@ tests/
   data/               example_n5.json (ví dụ chuẩn, bậc ba), example_n5_quadratic.json (bậc hai)
 scripts/
   reproduce.sh        tái tạo toàn bộ thí nghiệm bằng một lệnh
-  gen_data.py         sinh instance IoT tổng hợp và manifest.csv (gen_data_tv5.py là bản gốc giống hệt)
+  gen_data.py         sinh instance IoT tổng hợp và manifest.csv
   make_quadratic_data.cpp  chuyển data/synthetic sang mô hình bậc hai (data/synthetic_quadratic)
   analyze_complexity.py    hồi quy log-log, đối chiếu thực nghiệm với lý thuyết (5.05)
   plot_results.py, plot_module_diagram.py, plot_style.py   vẽ hình cho báo cáo (6.01)

@@ -15,22 +15,24 @@ using namespace edgedp;
 
 static int g_pass = 0, g_fail = 0, g_skip = 0;
 
-#define CHECK(cond)                                                                           \
-    do {                                                                                      \
-        if (!(cond)) {                                                                        \
+#define CHECK(cond)                                                                               \
+    do {                                                                                          \
+        if (!(cond)) {                                                                            \
             std::cerr << "    CHECK failed: " #cond " (" << __FILE__ << ":" << __LINE__ << ")\n"; \
-            return false;                                                                     \
-        }                                                                                     \
+            return false;                                                                         \
+        }                                                                                         \
     } while (0)
 
 static bool close_enough(ld a, ld b) {
-    return std::fabs(static_cast<double>(a - b)) <= 1e-9 * std::max<double>(1.0, std::fabs(static_cast<double>(a)));
+    return std::fabs(static_cast<double>(a - b)) <=
+           1e-9 * std::max<double>(1.0, std::fabs(static_cast<double>(a)));
 }
 
 // Ví dụ ở mục 6 của tài liệu mô hình (đáp án: 973, dùng 2 node, cắt sau τ2).
 static Instance example_n5() {
     Instance in;
-    in.n = 5; in.m = 3;
+    in.n = 5;
+    in.m = 3;
     in.w = {2, 3, 1, 4, 2};
     in.d = {3, 4, 2, 6, 1};
     in.params.kappa_over_T2 = 1.0;
@@ -66,9 +68,13 @@ static bool valid_solution(const Instance& in, const Solution& s) {
 
 #if defined(_MSC_VER)
 #include <intrin.h>
-static inline int popcount32(unsigned int x) { return static_cast<int>(__popcnt(x)); }
+static inline int popcount32(unsigned int x) {
+    return static_cast<int>(__popcnt(x));
+}
 #else
-static inline int popcount32(unsigned int x) { return __builtin_popcount(x); }
+static inline int popcount32(unsigned int x) {
+    return __builtin_popcount(x);
+}
 #endif
 
 // "Oracle" độc lập: duyệt mọi tập điểm cắt (N nhỏ). Trả +inf nếu vô nghiệm.
@@ -91,12 +97,16 @@ static ld oracle_enumerate(const Instance& in) {
     return best;
 }
 
-static Instance random_instance(std::mt19937& rng, int maxN, int maxM, EnergyModel model = EnergyModel::Cubic) {
+static Instance random_instance(std::mt19937& rng, int maxN, int maxM,
+                                EnergyModel model = EnergyModel::Cubic) {
     auto U = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
     Instance in;
     in.n = U(1, maxN);
     in.m = U(1, maxM);
-    for (int i = 0; i < in.n; ++i) { in.w.push_back(U(0, 8)); in.d.push_back(U(0, 8)); }
+    for (int i = 0; i < in.n; ++i) {
+        in.w.push_back(U(0, 8));
+        in.d.push_back(U(0, 8));
+    }
     const double kap[] = {0.5, 1.0, 2.0}, eps[] = {0.5, 1.0, 2.0};
     in.params.kappa_over_T2 = kap[U(0, 2)];
     in.params.eps = eps[U(0, 2)];
@@ -139,8 +149,8 @@ static bool example_costs_match_doc_table() {
     CHECK(close_enough(cm.cost(0, 1), 261));
     CHECK(close_enough(cm.cost(0, 2), 378));
     CHECK(close_enough(cm.cost(0, 3), 469));
-    CHECK(cm.cost(0, 4) == inf());   // W = 10 > cap = 8
-    CHECK(cm.cost(3, 5) == inf());   // cắt sau τ3: d_3 = 6 > link_cap = 5
+    CHECK(cm.cost(0, 4) == inf());  // W = 10 > cap = 8
+    CHECK(cm.cost(3, 5) == inf());  // cắt sau τ3: d_3 = 6 > link_cap = 5
     return true;
 }
 
@@ -172,8 +182,10 @@ static bool task_too_heavy_infeasible() {
 
 static bool single_task() {
     Instance in;
-    in.n = 1; in.m = 1;
-    in.w = {5}; in.d = {7};
+    in.n = 1;
+    in.m = 1;
+    in.w = {5};
+    in.d = {7};
     in.params = {2.0L, 3.0L, 0.5L, 10.0L, 1.0L};  // κ/T²=2, E_on=3, ε=0.5, cap=10, link_cap=1
     Solution s = solve_baseline(in);
     // k=0 nên d_0 = 7 không bị link_cap chặn: 3 + 2*125 + 0.5*7 = 256.5
@@ -183,7 +195,8 @@ static bool single_task() {
 
 static bool empty_instance() {
     Instance in;
-    in.n = 0; in.m = 3;
+    in.n = 0;
+    in.m = 3;
     Solution s = solve_baseline(in);
     CHECK(s.feasible && s.energy == 0 && s.nodes_used == 0 && s.segments.empty());
     return true;
@@ -198,8 +211,10 @@ static bool no_nodes() {
 
 static bool zero_work_tasks() {
     Instance in;
-    in.n = 3; in.m = 2;
-    in.w = {0, 0, 0}; in.d = {0, 0, 0};
+    in.n = 3;
+    in.m = 2;
+    in.w = {0, 0, 0};
+    in.d = {0, 0, 0};
     in.params = {1.0L, 5.0L, 1.0L, 1.0L, 1.0L};
     Solution s = solve_baseline(in);
     CHECK(s.feasible && close_enough(s.energy, 5) && s.nodes_used == 1);  // một đoạn: chỉ tốn E_on
@@ -214,7 +229,12 @@ static bool baseline_vs_oracle_random() {
         Solution s = solve_baseline(in);
         const ld ref = oracle_enumerate(in);
         CHECK((ref != inf()) == s.feasible);
-        if (s.feasible) { CHECK(close_enough(ref, s.energy)); ++feasible_cnt; } else { ++infeasible_cnt; }
+        if (s.feasible) {
+            CHECK(close_enough(ref, s.energy));
+            ++feasible_cnt;
+        } else {
+            ++infeasible_cnt;
+        }
         CHECK(valid_solution(in, s));
     }
     CHECK(feasible_cnt > 100 && infeasible_cnt > 100);  // phải có cả hai loại input (1000 vòng)
@@ -225,11 +245,17 @@ static bool baseline_vs_oracle_random() {
 
 static bool cost_quadratic_matches_formula() {
     Instance in;
-    in.n = 2; in.m = 2;
-    in.w = {2, 3}; in.d = {1, 4};
-    in.params.e_on = 10; in.params.eps = 0.5L; in.params.cap = 100; in.params.link_cap = 100;
+    in.n = 2;
+    in.m = 2;
+    in.w = {2, 3};
+    in.d = {1, 4};
+    in.params.e_on = 10;
+    in.params.eps = 0.5L;
+    in.params.cap = 100;
+    in.params.link_cap = 100;
     in.params.model = EnergyModel::Quadratic;
-    in.params.quad_a = 2; in.params.quad_b = 1;
+    in.params.quad_a = 2;
+    in.params.quad_b = 1;
     CostModel cm(in);
     CHECK(close_enough(cm.cost(0, 2), 65.5L));  // 10 + 2*25 + 1*5 + 0.5*d_0(=1)
     CHECK(close_enough(cm.cost(1, 2), 33));     // 10 + 2*9  + 1*3 + 0.5*d_1(=4)
@@ -245,21 +271,28 @@ static bool json_parses_model() {
     Instance a = parse_instance_json(base + "}}");
     CHECK(a.params.model == EnergyModel::Cubic);  // không ghi model -> cubic
     Instance b = parse_instance_json(base + R"(, "model": "quadratic"}})");
-    CHECK(b.params.model == EnergyModel::Quadratic && b.params.quad_a == 3.0L && b.params.quad_b == 0);  // a mặc định = κ/T²
+    CHECK(b.params.model == EnergyModel::Quadratic && b.params.quad_a == 3.0L &&
+          b.params.quad_b == 0);  // a mặc định = κ/T²
     Instance c = parse_instance_json(base + R"(, "model": "quadratic", "quad_a": 0.5, "quad_b": 2}})");
     CHECK(c.params.quad_a == 0.5L && c.params.quad_b == 2.0L);
     bool threw = false;
-    try { parse_instance_json(base + R"(, "model": "linear"}})"); } catch (const std::exception&) { threw = true; }
+    try {
+        parse_instance_json(base + R"(, "model": "linear"}})");
+    } catch (const std::exception&) { threw = true; }
     CHECK(threw);
     threw = false;
-    try { parse_instance_json(base + R"(, "model": "quadratic", "quad_a": -1}})"); } catch (const std::exception&) { threw = true; }
+    try {
+        parse_instance_json(base + R"(, "model": "quadratic", "quad_a": -1}})");
+    } catch (const std::exception&) { threw = true; }
     CHECK(threw);
     return true;
 }
 
 static bool cht_rejects_cubic() {
     bool threw = false;
-    try { solve_cht(example_n5()); } catch (const NotImplemented&) { threw = true; }
+    try {
+        solve_cht(example_n5());
+    } catch (const NotImplemented&) { threw = true; }
     CHECK(threw);  // CHT chỉ đúng cho bậc hai, không được âm thầm cho đáp án sai
     return true;
 }
@@ -270,9 +303,14 @@ static bool cht_larger_inputs() {
     auto U = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
     for (int t = 0; t < 120; ++t) {
         Instance in;
-        in.n = U(100, 400); in.m = U(1, 8);
+        in.n = U(100, 400);
+        in.m = U(1, 8);
         ll tot = 0;
-        for (int i = 0; i < in.n; ++i) { in.w.push_back(U(0, 20)); in.d.push_back(U(0, 10)); tot += in.w.back(); }
+        for (int i = 0; i < in.n; ++i) {
+            in.w.push_back(U(0, 20));
+            in.d.push_back(U(0, 10));
+            tot += in.w.back();
+        }
         in.params.model = EnergyModel::Quadratic;
         in.params.quad_a = U(0, 3) * 0.5L;
         in.params.quad_b = U(0, 4);
@@ -314,11 +352,14 @@ static bool json_roundtrip_example() {
 
 static bool json_rejects_bad_input() {
     bool threw = false;
-    try { parse_instance_json(R"({"n": 2, "m": 1, "w": [1], "d": [1, 1], "params": {}})"); }
-    catch (const std::exception&) { threw = true; }
+    try {
+        parse_instance_json(R"({"n": 2, "m": 1, "w": [1], "d": [1, 1], "params": {}})");
+    } catch (const std::exception&) { threw = true; }
     CHECK(threw);
     threw = false;
-    try { parse_instance_json("{not json"); } catch (const std::exception&) { threw = true; }
+    try {
+        parse_instance_json("{not json");
+    } catch (const std::exception&) { threw = true; }
     CHECK(threw);
     return true;
 }
@@ -357,8 +398,13 @@ static bool cross_check(SolverFn fn, int max_n, EnergyModel model) {
 
 static void run(const std::string& name, const std::function<bool()>& f) {
     try {
-        if (f()) { ++g_pass; std::cout << "[PASS] " << name << "\n"; }
-        else { ++g_fail; std::cout << "[FAIL] " << name << "\n"; }
+        if (f()) {
+            ++g_pass;
+            std::cout << "[PASS] " << name << "\n";
+        } else {
+            ++g_fail;
+            std::cout << "[FAIL] " << name << "\n";
+        }
     } catch (const NotImplemented& e) {
         ++g_skip;
         std::cout << "[SKIP] " << name << "  (" << e.what() << ")\n";
