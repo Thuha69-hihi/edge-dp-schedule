@@ -36,5 +36,5 @@ if [ -f "$QUAD_BIG" ]; then
   run dc  "$QUAD_BIG"
   run cht "$QUAD_BIG"
 else
-  echo "   Khong thay $QUAD_BIG (can merge PR #12 de co data/synthetic_quadratic)"
+  echo "   Khong thay $QUAD_BIG "
 fi
